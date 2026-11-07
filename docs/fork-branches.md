@@ -21,19 +21,21 @@ repository default for the weekly runs to happen.
 
 ## 16 KB autobuilds
 
-`build-16k.yml` dispatches the upstream **Build Kernels** workflow (`main.yml`) with
-`page_size=16k`; it does not duplicate the build matrix.
+`build-16k.yml` (display name *Build Kernels (4 KB + 16 KB)*) dispatches the upstream
+**Build Kernels** workflow (`main.yml`) once per page size; it does not duplicate the matrix.
 
 - **Weekly (Monday 03:17 UTC):** `6.18.x-android17` (KernelSU-Next, no SUSFS) and
-  `6.12.x-android16` (KernelSU-Next + SUSFS), both `lts`, as pre-releases.
-- **Manual:** Actions → *Build 16 KB Kernels* → Run workflow. Pick one family (6.1, 6.6,
-  6.12, 6.18), patch level, root flavor, SUSFS and release type.
+  `6.12.x-android16` (KernelSU-Next + SUSFS), both `lts`, **4 KB and 16 KB** — four runs.
+- **Manual:** Actions → *Build Kernels (4 KB + 16 KB)* → Run workflow. Pick `both`, `4k` or
+  `16k`, one family (6.1, 6.6, 6.12, 6.18), patch level, root flavor, SUSFS and release type.
 - `16k` requires an explicit family in the upstream workflow (its `All` option is rejected);
   that is why the workflow always passes one.
 - 6.18 has no `susfs4ksu` `gki-android17-6.18` branch upstream, so SUSFS is forced off there
   and the workflow emits a warning.
-- Artifacts land in the fork's **Actions** run; `Pre-Release`/`Release` also create an `rN`
-  release. Asset names carry the `-16k` suffix.
+- `CI` runs upload **Actions artifacts only**. `Pre-Release`/`Release` create a release as
+  well: 4 KB uses the plain `rN` line, 16 KB uses `rN-16k` (title "Release N (16 KB)"), so
+  both can run at once without racing for the same tag.
+- 16 KB assets carry the `-16k` suffix in their filenames.
 
 ## Keeping `main` in sync
 

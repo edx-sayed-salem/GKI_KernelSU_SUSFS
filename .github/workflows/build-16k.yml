@@ -1,9 +1,9 @@
-name: Build 16 KB Kernels
+name: Build Kernels (4 KB + 16 KB)
 
 # Fork-only automation. WildKernels' build matrix already knows how to pass Kleaf
 # --page_size=16k, but their scheduled/release runs use the 4k default. This workflow
-# dispatches the existing "Build Kernels" workflow on this fork with page_size=16k so a
-# 16 KB artifact is produced without maintaining a second copy of the build matrix.
+# dispatches the existing "Build Kernels" workflow on this fork for both page sizes, so the
+# fork produces its own 4 KB and 16 KB artifacts without maintaining a second build matrix.
 #
 # It lives on `master` (this fork's default branch). `main` stays a pristine mirror of
 # WildKernels/GKI_KernelSU_SUSFS and is updated by sync-upstream.yml.
@@ -11,8 +11,16 @@ name: Build 16 KB Kernels
 on:
   workflow_dispatch:
     inputs:
+      page_size:
+        description: "Page size(s) to build"
+        type: choice
+        options:
+          - both
+          - 4k
+          - 16k
+        default: both
       kernel_version:
-        description: "GKI family to build with 16 KB pages"
+        description: "GKI family"
         type: choice
         options:
           - 6.1.x-android14
@@ -25,7 +33,7 @@ on:
         type: string
         default: lts
       root_flavor:
-        description: "Root implementation for the 16 KB kernel"
+        description: "Root implementation"
         type: choice
         options:
           - KernelSU-Next
@@ -41,7 +49,7 @@ on:
         type: boolean
         default: false
       release_type:
-        description: "Release type"
+        description: "Release type (CI = artifacts only, no rN release)"
         type: choice
         options:
           - CI
@@ -63,10 +71,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Dispatch 16 KB build(s)
+      - name: Dispatch kernel build(s)
         env:
           GH_TOKEN: ${{ github.token }}
           REF: ${{ github.ref_name }}
+          INPUT_PAGE_SIZE: ${{ inputs.page_size }}
           INPUT_VERSION: ${{ inputs.kernel_version }}
           INPUT_PATCH: ${{ inputs.os_patch_level }}
           INPUT_ROOT: ${{ inputs.root_flavor }}
@@ -77,32 +86,44 @@ jobs:
           set -euo pipefail
 
           dispatch() {
-            local version="$1" patch="$2" root="$3" susfs="$4" release="$5"
+            local pages="$1" version="$2" patch="$3" root="$4" susfs="$5" release="$6"
             if [ "$version" = "6.18.x-android17" ] && [ "$susfs" = "true" ]; then
               echo "::warning::SUSFS has no gki-android17-6.18 branch upstream; building $version without SUSFS."
               susfs=false
             fi
-            echo "Dispatching Build Kernels: version=$version page_size=16k root=$root susfs=$susfs release=$release"
+            echo "Dispatching Build Kernels: version=$version page_size=$pages root=$root susfs=$susfs release=$release"
             gh workflow run main.yml \
               --ref "$REF" \
               -f release_type="$release" \
               -f kernel_build_version="$version" \
               -f os_patch_level="$patch" \
-              -f page_size=16k \
+              -f page_size="$pages" \
               -f root_flavor="$root" \
               -f use_susfs="$susfs" \
               -f commit_mode=verified
           }
 
+          dispatch_pair() {
+            local version="$1" patch="$2" root="$3" susfs="$4" release="$5" pages="$6"
+            case "$pages" in
+              both) dispatch 4k "$version" "$patch" "$root" "$susfs" "$release"
+                    dispatch 16k "$version" "$patch" "$root" "$susfs" "$release" ;;
+              4k|16k) dispatch "$pages" "$version" "$patch" "$root" "$susfs" "$release" ;;
+              *) echo "unsupported page_size '$pages'" >&2; exit 1 ;;
+            esac
+          }
+
           if [ "$EVENT" = "schedule" ]; then
-            # Default autobuild set: the two families that matter for 16 KB devices.
-            # 6.18 is the Android 17 GKI (ps16k images); 6.12 is Android 16.
-            dispatch "6.18.x-android17" "lts" "KernelSU-Next" "false" "Pre-Release"
-            dispatch "6.12.x-android16" "lts" "KernelSU-Next" "true" "Pre-Release"
+            # Default autobuild set: the two families that matter for 16 KB devices, both
+            # page sizes. 6.18 is the Android 17 GKI (ps16k images); 6.12 is Android 16.
+            dispatch_pair "6.18.x-android17" "lts" "KernelSU-Next" "false" "Pre-Release" "both"
+            dispatch_pair "6.12.x-android16" "lts" "KernelSU-Next" "true" "Pre-Release" "both"
           else
-            dispatch "${INPUT_VERSION:-6.18.x-android17}" \
+            dispatch_pair \
+              "${INPUT_VERSION:-6.18.x-android17}" \
               "${INPUT_PATCH:-lts}" \
               "${INPUT_ROOT:-KernelSU-Next}" \
               "${INPUT_SUSFS:-false}" \
-              "${INPUT_RELEASE:-Pre-Release}"
+              "${INPUT_RELEASE:-Pre-Release}" \
+              "${INPUT_PAGE_SIZE:-both}"
           fi

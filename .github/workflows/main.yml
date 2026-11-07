@@ -1437,26 +1437,32 @@ jobs:
         id: tag
         if: inputs.release_type != 'CI'
         run: |
-          mapfile -t RELEASE_TAGS < <(gh api --paginate "repos/${{ github.repository }}/tags?per_page=100" --jq '.[].name' 2>/dev/null | grep -E '^r[0-9]+$' || true)
+          # 16 KB releases use their own rN-16k line so a 4 KB and a 16 KB run can be
+          # dispatched together without racing for the same tag (and without either one
+          # silently absorbing the other's assets). The 4 KB line stays plain rN.
+          PREFIX=""
+          if [ "${{ inputs.page_size }}" = "16k" ]; then PREFIX="-16k"; fi
+          mapfile -t RELEASE_TAGS < <(gh api --paginate "repos/${{ github.repository }}/tags?per_page=100" --jq '.[].name' 2>/dev/null | grep -E "^r[0-9]+${PREFIX}$" || true)
 
           LATEST_REV=0
           for TAG in "${RELEASE_TAGS[@]}"; do
             REV="${TAG#r}"
+            REV="${REV%${PREFIX}}"
             if [[ "$REV" =~ ^[0-9]+$ && "$REV" -gt "$LATEST_REV" ]]; then
               LATEST_REV="$REV"
             fi
           done
 
           if [[ "$LATEST_REV" -gt 0 ]]; then
-            NEW_TAG="r$((LATEST_REV + 1))"
+            NEW_TAG="r$((LATEST_REV + 1))${PREFIX}"
           else
-            NEW_TAG="r1"
+            NEW_TAG="r1${PREFIX}"
           fi
 
           if [[ ${#RELEASE_TAGS[@]} -gt 0 ]]; then
-            echo "Latest r-tag: r${LATEST_REV}"
+            echo "Latest r-tag: r${LATEST_REV}${PREFIX}"
           else
-            echo "No existing r-tags found; starting at r1"
+            echo "No existing r-tags for prefix '${PREFIX}'; starting at r1${PREFIX}"
           fi
           echo "New tag: $NEW_TAG"
           echo "NEW_TAG=${NEW_TAG}" >> "$GITHUB_ENV"
@@ -1467,10 +1473,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Format release title: convert rN -> Release N
-          if [[ "${NEW_TAG}" =~ ^r([0-9]+)$ ]]; then
+          # Format release title: rN -> "Release N", rN-16k -> "Release N (16 KB)".
+          if [[ "${NEW_TAG}" =~ ^r([0-9]+)(-16k)?$ ]]; then
             REV_NUM="${BASH_REMATCH[1]}"
-            release_title="Release ${REV_NUM}"
+            if [ "${BASH_REMATCH[2]}" = "-16k" ]; then
+              release_title="Release ${REV_NUM} (16 KB)"
+            else
+              release_title="Release ${REV_NUM}"
+            fi
           else
             release_title="Release ${NEW_TAG}"
           fi

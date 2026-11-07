@@ -49,7 +49,7 @@ The workflow currently exposes these families:
 The workflow's **Page size** input defaults to `4k`. Selecting `16k` requires one explicit
 family (not `All`) and builds through Kleaf's `--page_size=16k`; supported families are
 `6.1.x-android14`, `6.6.x-android15`, `6.12.x-android16` and `6.18.x-android17`. On this fork,
-*Build 16 KB Kernels* schedules `6.18` and `6.12` weekly and exposes the same choice manually
+*Build Kernels (4 KB + 16 KB)* schedules `6.18` and `6.12` weekly for both page sizes and exposes the same choice manually
 (see [`fork-branches.md`](fork-branches.md)). `6.18` currently has no SUSFS branch upstream, so
 SUSFS is forced off for that family.
 
