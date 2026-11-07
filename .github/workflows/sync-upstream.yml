@@ -1,0 +1,43 @@
+name: Sync main from WildKernels
+
+# Fork-only. `main` mirrors WildKernels/GKI_KernelSU_SUSFS exactly; custom work lives on
+# `master`. This keeps the mirror current without touching the default branch.
+#
+# It is fast-forward only: if `main` ever gains a local commit (a mistake), the job fails
+# loudly instead of rewriting history. Merge `main` into `master` yourself when you want the
+# upstream changes in the custom branch.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 2 * * 1"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fast-forward main to upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/WildKernels/GKI_KernelSU_SUSFS.git
+          git fetch upstream main --prune
+          before="$(git rev-parse HEAD)"
+          upstream_head="$(git rev-parse upstream/main)"
+          if [ "$before" = "$upstream_head" ]; then
+            echo "main is already at upstream/main ($before)."
+            exit 0
+          fi
+          git merge --ff-only upstream/main
+          git push origin main
+          echo "main fast-forwarded ${before}..${upstream_head}."

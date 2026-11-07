@@ -1,0 +1,108 @@
+name: Build 16 KB Kernels
+
+# Fork-only automation. WildKernels' build matrix already knows how to pass Kleaf
+# --page_size=16k, but their scheduled/release runs use the 4k default. This workflow
+# dispatches the existing "Build Kernels" workflow on this fork with page_size=16k so a
+# 16 KB artifact is produced without maintaining a second copy of the build matrix.
+#
+# It lives on `master` (this fork's default branch). `main` stays a pristine mirror of
+# WildKernels/GKI_KernelSU_SUSFS and is updated by sync-upstream.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: "GKI family to build with 16 KB pages"
+        type: choice
+        options:
+          - 6.1.x-android14
+          - 6.6.x-android15
+          - 6.12.x-android16
+          - 6.18.x-android17
+        default: 6.18.x-android17
+      os_patch_level:
+        description: "Patch date (YYYY-MM), sublevel, lts, or All"
+        type: string
+        default: lts
+      root_flavor:
+        description: "Root implementation for the 16 KB kernel"
+        type: choice
+        options:
+          - KernelSU-Next
+          - KernelSU
+          - BakaSU
+          - SukiSU-Ultra
+          - KowSU
+          - FinaSU
+          - No Root
+        default: KernelSU-Next
+      use_susfs:
+        description: "Apply SUSFS (6.18 has no SUSFS branch upstream yet; it is forced off there)"
+        type: boolean
+        default: false
+      release_type:
+        description: "Release type"
+        type: choice
+        options:
+          - CI
+          - Pre-Release
+          - Release
+        default: Pre-Release
+  schedule:
+    # Weekly, Monday 03:17 UTC. Scheduled workflows only run from the repository's
+    # default branch, which is why `master` must be the default for this fork.
+    - cron: "17 3 * * 1"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Dispatch 16 KB build(s)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.kernel_version }}
+          INPUT_PATCH: ${{ inputs.os_patch_level }}
+          INPUT_ROOT: ${{ inputs.root_flavor }}
+          INPUT_SUSFS: ${{ inputs.use_susfs }}
+          INPUT_RELEASE: ${{ inputs.release_type }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          dispatch() {
+            local version="$1" patch="$2" root="$3" susfs="$4" release="$5"
+            if [ "$version" = "6.18.x-android17" ] && [ "$susfs" = "true" ]; then
+              echo "::warning::SUSFS has no gki-android17-6.18 branch upstream; building $version without SUSFS."
+              susfs=false
+            fi
+            echo "Dispatching Build Kernels: version=$version page_size=16k root=$root susfs=$susfs release=$release"
+            gh workflow run main.yml \
+              --ref "$REF" \
+              -f release_type="$release" \
+              -f kernel_build_version="$version" \
+              -f os_patch_level="$patch" \
+              -f page_size=16k \
+              -f root_flavor="$root" \
+              -f use_susfs="$susfs" \
+              -f commit_mode=verified
+          }
+
+          if [ "$EVENT" = "schedule" ]; then
+            # Default autobuild set: the two families that matter for 16 KB devices.
+            # 6.18 is the Android 17 GKI (ps16k images); 6.12 is Android 16.
+            dispatch "6.18.x-android17" "lts" "KernelSU-Next" "false" "Pre-Release"
+            dispatch "6.12.x-android16" "lts" "KernelSU-Next" "true" "Pre-Release"
+          else
+            dispatch "${INPUT_VERSION:-6.18.x-android17}" \
+              "${INPUT_PATCH:-lts}" \
+              "${INPUT_ROOT:-KernelSU-Next}" \
+              "${INPUT_SUSFS:-false}" \
+              "${INPUT_RELEASE:-Pre-Release}"
+          fi

@@ -39,7 +39,7 @@ on:
         type: string
         default: All
       page_size:
-        description: "ARM64 page size. 16k requires explicitly selecting Kernel Version 6.1.x-android14, 6.6.x-android15 or 6.12.x-android16 (All is rejected)"
+        description: "ARM64 page size. 16k requires explicitly selecting Kernel Version 6.1.x-android14, 6.6.x-android15, 6.12.x-android16 or 6.18.x-android17 (All is rejected)"
         type: choice
         options:
           - 4k
@@ -181,12 +181,14 @@ jobs:
           KVER="${{ inputs.kernel_build_version || 'All' }}"
           [ "$PAGE_SIZE" = "16k" ] || exit 0
           # Only these GKI families use a Kleaf build branch exposing
-          # --page_size (main-kernel-build-2023/2024, main-kernel-2025).
+          # --page_size (main-kernel-build-2023/2024, main-kernel-2025,
+          # main-kernel-2026 for 6.18). build.yml's own gate already accepts
+          # all four; keep the two lists in sync.
           case "$KVER" in
-            6.1.x-android14|6.6.x-android15|6.12.x-android16) ;;
+            6.1.x-android14|6.6.x-android15|6.12.x-android16|6.18.x-android17) ;;
             *)
               echo "ERROR: page_size=16k requires kernel_build_version to be one of:" >&2
-              echo "  6.1.x-android14, 6.6.x-android15, 6.12.x-android16" >&2
+              echo "  6.1.x-android14, 6.6.x-android15, 6.12.x-android16, 6.18.x-android17" >&2
               echo "Got: '${KVER}'." >&2
               exit 1
               ;;

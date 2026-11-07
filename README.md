@@ -39,6 +39,9 @@ Generic kernels built on [Google's GKI sources](https://android.googlesource.com
 
 Fork the repository and follow **[Build Your Own Kernel](docs/build-from-fork.md)** to select one kernel family, patch level, root implementation, and feature set in GitHub Actions.
 
+> [!NOTE]
+> **This fork** keeps `main` as a pristine mirror of WildKernels and uses `master` as the default branch for fork-only work: scheduled **16 KB page-size** builds (`Build 16 KB Kernels`) and an upstream sync job. See [`docs/fork-branches.md`](docs/fork-branches.md).
+
 ---
 
 ## Installation
