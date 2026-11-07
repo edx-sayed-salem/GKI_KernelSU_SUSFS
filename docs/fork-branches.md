@@ -37,6 +37,24 @@ repository default for the weekly runs to happen.
   both can run at once without racing for the same tag.
 - 16 KB assets carry the `-16k` suffix in their filenames.
 
+## First verified pair (2026-11-07)
+
+Manual `both` / `6.18.x-android17` / `lts` / KernelSU-Next / no SUSFS / Pre-Release:
+
+- `r1` — 4 KB: `6.18.38-android17-lts-KernelSU-Next-AnyKernel3.zip`
+- `r1-16k` — 16 KB: `6.18.38-android17-lts-KernelSU-Next-16k-AnyKernel3.zip`
+
+Embedded kernel config extracted from the two `Image` files:
+
+```
+4k : CONFIG_ARM64_4K_PAGES=y   # CONFIG_ARM64_16K_PAGES is not set
+16k: CONFIG_ARM64_16K_PAGES=y  # CONFIG_ARM64_4K_PAGES is not set
+```
+
+Both identify as `Linux version 6.18.38-android17-Wild`; the `Image` hashes differ
+(`2ece8786…` vs `1884ede9…`). Each release also carries the two manager APKs and
+`NoMount-Metamodule.zip`.
+
 ## Keeping `main` in sync
 
 Automated: `sync-upstream.yml` runs weekly and fast-forwards `main` to
