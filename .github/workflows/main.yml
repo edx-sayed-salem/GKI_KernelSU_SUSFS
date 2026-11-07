@@ -1721,7 +1721,11 @@ jobs:
       - name: Download NoMount metamodule
         uses: actions/download-artifact@v7
         with:
-          path: release-assets
+          # Dedicated directory: on some download-artifact versions a pattern match lands
+          # the files directly in `path` instead of an artifact-named subdirectory, which
+          # previously left the metamodule unzipped and failed the release at the verify
+          # step (observed on this fork's r1/r1-16k runs).
+          path: nomount-assets
           pattern: "*NoMount-Metamodule"
           merge-multiple: false
 
@@ -1740,16 +1744,18 @@ jobs:
 
       - name: Zip NoMount Metamodule for Release
         run: |
-          set -e
-          shopt -s nullglob
-
-          for dir in release-assets/*NoMount-Metamodule; do
-            zip_name="${dir}.zip"
-            rm -f "$zip_name"
-            cd "$dir"
-            zip -r -q -9 "../$(basename "$zip_name")" .
-            cd - >/dev/null
-          done
+          set -euo pipefail
+          mkdir -p release-assets
+          src="nomount-assets"
+          if [ -d "nomount-assets/NoMount-Metamodule" ]; then
+            src="nomount-assets/NoMount-Metamodule"
+          fi
+          if [ -z "$(ls -A "$src" 2>/dev/null)" ]; then
+            echo "ERROR: NoMount metamodule artifact is empty at $src" >&2
+            exit 1
+          fi
+          rm -f release-assets/NoMount-Metamodule.zip
+          (cd "$src" && zip -r -q -9 "$GITHUB_WORKSPACE/release-assets/NoMount-Metamodule.zip" .)
 
       - name: Verify NoMount metamodule zip
         if: inputs.use_nomount
