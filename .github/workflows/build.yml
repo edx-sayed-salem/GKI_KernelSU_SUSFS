@@ -249,6 +249,52 @@ jobs:
           flavor: ${{ inputs.root_flavor }}
           commit: ${{ inputs.root_commit }}
 
+      # Pin the manager certificate this kernel will crown. Upstream
+      # KernelSU-Next ships the official manager cert (0x3e6 / 79e59011…), and
+      # its manager APKs are 4 KB-aligned, so on a 16 KB-page device the app is
+      # never crowned ("Not installed") and its libksud cannot even exec. Our
+      # manager APKs are built from edx-sayed-salem/KernelSU-Next `master` and
+      # signed with the project keystore, so the kernel has to trust that cert.
+      # Values are the certificate DER length and SHA-256, not the APK.
+      - name: Pin fork manager certificate (KernelSU-Next)
+        if: inputs.root_flavor == 'next'
+        shell: bash
+        working-directory: ${{ github.workspace }}/kernel/KernelSU-Next
+        run: |
+          set -euo pipefail
+          CERT_SIZE=0x320
+          CERT_HASH=bfdd092457348ee7cb7f6e228b8fe518e95d445b0736d796d578a5e3b478940d
+          kbuild=kernel/Kbuild
+          test -f "$kbuild"
+          if grep -q '^KSU_NEXT_MANAGER_LIST :=' "$kbuild"; then
+            # pershoot dev-susfs: a comma-separated size:hash trust list.
+            sed -i "s|^KSU_NEXT_MANAGER_LIST := .*|KSU_NEXT_MANAGER_LIST := ${CERT_SIZE}:${CERT_HASH}|" "$kbuild"
+            grep -q "^KSU_NEXT_MANAGER_LIST := ${CERT_SIZE}:${CERT_HASH}$" "$kbuild" || {
+              echo "ERROR: failed to pin KSU_NEXT_MANAGER_LIST" >&2; grep -n 'KSU_NEXT_MANAGER_LIST' "$kbuild" >&2; exit 1; }
+          else
+            sed -i "s/^KSU_NEXT_MANAGER_SIZE := .*/KSU_NEXT_MANAGER_SIZE := ${CERT_SIZE}/" "$kbuild"
+            sed -i "s/^KSU_NEXT_MANAGER_HASH := .*/KSU_NEXT_MANAGER_HASH := ${CERT_HASH}/" "$kbuild"
+            grep -q "^KSU_NEXT_MANAGER_SIZE := ${CERT_SIZE}$" "$kbuild" || {
+              echo "ERROR: failed to pin KSU_NEXT_MANAGER_SIZE" >&2; grep -n 'KSU_NEXT_MANAGER_SIZE' "$kbuild" >&2; exit 1; }
+            grep -q "^KSU_NEXT_MANAGER_HASH := ${CERT_HASH}$" "$kbuild" || {
+              echo "ERROR: failed to pin KSU_NEXT_MANAGER_HASH" >&2; grep -n 'KSU_NEXT_MANAGER_HASH' "$kbuild" >&2; exit 1; }
+          fi
+          grep -n '^KSU_NEXT_MANAGER' "$kbuild"
+
+      # Same pairing for BakaSU: its trusted-manager table lives in
+      # kernel/manager/manager_sign.h, and GKI builds keep a single row.
+      - name: Pin fork manager certificate (BakaSU)
+        if: inputs.root_flavor == 'bakasu'
+        shell: bash
+        working-directory: ${{ github.workspace }}/kernel/BakaSU
+        run: |
+          set -euo pipefail
+          header=kernel/manager/manager_sign.h
+          test -f "$header"
+          sed -i 's/^#define EXPECTED_SIZE_BAKASU .*/#define EXPECTED_SIZE_BAKASU 0x320/' "$header"
+          sed -i 's/^#define EXPECTED_HASH_BAKASU .*/#define EXPECTED_HASH_BAKASU "bfdd092457348ee7cb7f6e228b8fe518e95d445b0736d796d578a5e3b478940d"/' "$header"
+          grep -n 'EXPECTED_\(SIZE\|HASH\)_BAKASU' "$header"
+
       - name: Mark No Root build metadata
         if: inputs.root_flavor == 'none'
         shell: bash
