@@ -55,6 +55,13 @@ Both identify as `Linux version 6.18.38-android17-Wild`; the `Image` hashes diff
 (`2ece8786…` vs `1884ede9…`). Each release also carries the two manager APKs and
 `NoMount-Metamodule.zip`.
 
+Second pair, matching the Android 17 `ps16k` emulator's `6.12.x-android16` KMI, with SUSFS:
+
+- `r2` — 4 KB: `6.12.97-android16-lts-KernelSU-Next-AnyKernel3.zip`
+- `r2-16k` — 16 KB: `6.12.97-android16-lts-KernelSU-Next-16k-AnyKernel3.zip`
+- SUSFS `v2.3.0` (`c6788e2a…`), KernelSU-Next `v3.4.2-130-g40f77cdb`, configs
+  `CONFIG_ARM64_4K_PAGES=y` / `CONFIG_ARM64_16K_PAGES=y` respectively; `Image` hashes differ.
+
 ## Keeping `main` in sync
 
 Automated: `sync-upstream.yml` runs weekly and fast-forwards `main` to
