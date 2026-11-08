@@ -133,19 +133,17 @@ runs:
           local owner repo wf branch want stock pinned run_id
           case "$flavor" in
             next)
-              owner="KernelSU-Next"; repo="KernelSU-Next"; wf="build-manager-ci.yml"
-              branch="dev"; want="manager,manager-spoofed"
-              resolve_stock "${INPUT_NEXT_COMMIT:-}" kernelsu_next_commit https://github.com/KernelSU-Next/KernelSU-Next.git dev
+              # Fork build: 16 KB-aligned libksud + the certificate the kernel
+              # pins. Cert-stable, so take the latest successful fork build.
+              owner="edx-sayed-salem"; repo="KernelSU-Next"; wf="build-manager.yml"
+              branch="master"; want="manager,manager-spoofed"
+              STOCK=""; PINNED=0
               ;;
             next-susfs)
-              owner="pershoot"; repo="KernelSU-Next"; wf="build-manager-ci.yml"
-              branch="dev-susfs"; want="manager,manager-spoofed"
-              resolve_stock "${INPUT_NEXT_SUSFS_COMMIT:-}" kernelsu_next_susfs_commit https://github.com/pershoot/KernelSU-Next.git dev-susfs
-              if [[ -z "$STOCK" && -z "${INPUT_NEXT_SUSFS_COMMIT:-}" ]]; then
-                # pershoot fork unreachable: fall back to upstream dev-susfs tip.
-                echo "pershoot dev-susfs tip not found; trying upstream KernelSU-Next dev-susfs" >&2
-                STOCK="$(resolve_sha https://github.com/KernelSU-Next/KernelSU-Next.git refs/heads/dev-susfs)"
-              fi
+              # Same fork build as `next`; the kernel flavor is still `next`.
+              owner="edx-sayed-salem"; repo="KernelSU-Next"; wf="build-manager.yml"
+              branch="master"; want="manager,manager-spoofed"
+              STOCK=""; PINNED=0
               ;;
             kernelsu)
               owner="tiann"; repo="KernelSU"; wf="build-manager.yml"
@@ -153,9 +151,11 @@ runs:
               resolve_stock "${INPUT_KSU_COMMIT:-}" kernelsu_commit https://github.com/tiann/KernelSU.git main
               ;;
             bakasu)
-              owner="Baka-SU"; repo="BakaSU"; wf="build-manager.yml"
-              branch="main"; want="Manager-release,Spoofed-Manager-release"
-              resolve_stock "${INPUT_BAKASU_COMMIT:-}" bakasu_commit https://github.com/Baka-SU/BakaSU.git main
+              # Fork: BakaSU `master` adds the 16 KB ksud build and pins the
+              # fork manager cert. Latest successful build is cert-stable.
+              owner="edx-sayed-salem"; repo="BakaSU"; wf="build-manager.yml"
+              branch="master"; want="Manager-release"
+              STOCK=""; PINNED=0
               ;;
             sukisu-ultra)
               owner="SukiSU-Ultra"; repo="SukiSU-Ultra"; wf="build-manager.yml"
