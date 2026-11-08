@@ -24,10 +24,16 @@ repository default for the weekly runs to happen.
 `build-16k.yml` (display name *Build Kernels (4 KB + 16 KB)*) dispatches the upstream
 **Build Kernels** workflow (`main.yml`) once per page size; it does not duplicate the matrix.
 
-- **Weekly (Monday 03:17 UTC):** `6.18.x-android17` (KernelSU-Next, no SUSFS) and
-  `6.12.x-android16` (KernelSU-Next + SUSFS), both `lts`, **4 KB and 16 KB** — four runs.
+- **Weekly (Monday 03:17 UTC):** full GKI coverage, Android 12 through 17.
+  - `6.18.x-android17` (KernelSU-Next, no SUSFS), `6.12.x-android16` (SUSFS, built from
+    `r22-16k` — master's 6.12 still hits the stock module-ABI panic), `6.6.x-android15` and
+    `6.1.x-android14` (SUSFS): **4 KB and 16 KB**.
+  - `5.15.x-android14`, `5.15.x-android13`, `5.10.x-android13`, `5.10.x-android12` (SUSFS):
+    **4 KB only** — Kleaf has no `--page_size` on those branches.
 - **Manual:** Actions → *Build Kernels (4 KB + 16 KB)* → Run workflow. Pick `both`, `4k` or
-  `16k`, one family (6.1, 6.6, 6.12, 6.18), patch level, root flavor, SUSFS and release type.
+  `16k`, one family (5.10 A12/A13, 5.15 A13/A14, 6.1 A14, 6.6 A15, 6.12 A16, 6.18 A17),
+  patch level, root flavor, SUSFS and release type. Choosing `both`/`16k` for a 5.x family
+  warns and drops to 4 KB (`16k` alone is an error).
 - `16k` requires an explicit family in the upstream workflow (its `All` option is rejected);
   that is why the workflow always passes one.
 - 6.18 has no `susfs4ksu` `gki-android17-6.18` branch upstream, so SUSFS is forced off there
