@@ -62,6 +62,51 @@ Second pair, matching the Android 17 `ps16k` emulator's `6.12.x-android16` KMI, 
 - SUSFS `v2.3.0` (`c6788e2a…`), KernelSU-Next `v3.4.2-130-g40f77cdb`, configs
   `CONFIG_ARM64_4K_PAGES=y` / `CONFIG_ARM64_16K_PAGES=y` respectively; `Image` hashes differ.
 
+## 16 KB manager APKs (paired signing)
+
+A 16 KB kernel is not enough: the KernelSU manager APK packages `ksud` as
+`lib/arm64-v8a/libksud.so` and **execs it** (`getKsuDaemonPath()` → `nativeLibraryDir/libksud.so`).
+Upstream's `ksud.yml` only passes `-Wl,-z,max-page-size=16384` for riscv64, so the aarch64
+`libksud.so` in upstream manager APKs is `p_align=0x1000` and cannot run on a 16 KB-page device.
+That is why the manager reports **"Not installed"** there even though the kernel has
+`CONFIG_KSU=y`.
+
+The fork builds its own managers:
+
+| Repo | `main` | `master` (default) |
+|---|---|---|
+| `edx-sayed-salem/KernelSU-Next` | upstream `dev` | + 16 KB `ksud.yml` flags + manager-cert pin |
+| `edx-sayed-salem/BakaSU` | upstream `main` | + 16 KB `ksud.yml` flags + manager-cert pin |
+
+Two things must match, or the kernel will never crown the app:
+
+1. **Page alignment.** `libksud.so` `LOAD` segments must be `0x4000` (verify with
+   `readelf -lW`). `libkernelsu.so` / `libadbroot.so` / the embedded `ksuinit` were already
+   16 KB upstream.
+2. **Manager certificate.** The kernel pins the manager's signing certificate
+   (`KernelSU-Next`: `KSU_NEXT_MANAGER_SIZE/HASH`, or `KSU_NEXT_MANAGER_LIST` on pershoot's
+   SUSFS fork; `BakaSU`: `EXPECTED_SIZE_BAKASU/HASH_BAKASU`). Both are the **certificate DER
+   length and SHA-256**, not the APK size/hash. Our managers are signed with the project
+   keystore:
+
+   ```
+   size 0x320 (800 bytes)
+   sha256 bfdd092457348ee7cb7f6e228b8fe518e95d445b0736d796d578a5e3b478940d
+   DN CN=KernelSU Manager, O=KernelSU, C=US
+   ```
+
+   The cert lives in the repo forks' `master` and, for the proven r22 tree, is injected by
+   `build.yml` after `root-setup` (`r22-16k` branch). A re-signed APK with any other key is
+   rejected by `is_manager_apk()` and shows "Not installed".
+
+Verify a built manager:
+
+```bash
+unzip -p <apk> lib/arm64-v8a/libksud.so > /tmp/libksud.so
+readelf -lW /tmp/libksud.so | awk '/LOAD/{print $0}'   # Align must be 0x4000
+apksigner verify --print-certs <apk>                   # digest must match the kernel pin
+```
+
 ## Keeping `main` in sync
 
 Automated: `sync-upstream.yml` runs weekly and fast-forwards `main` to

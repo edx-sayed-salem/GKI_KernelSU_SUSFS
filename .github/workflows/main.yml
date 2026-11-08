@@ -336,12 +336,13 @@ jobs:
           fi
           if [ "$SCHED_SUSFS" = "true" ]; then
             KERNELSU_COMMIT="$(pick "$PIN_KERNELSU" https://github.com/tiann/KernelSU.git refs/heads/main)"
-            BAKASU_COMMIT="$(pick "$PIN_BAKASU" https://github.com/Baka-SU/BakaSU.git refs/heads/main)"
+            # Fork master (upstream main + 16 KB manager cert pin).
+            BAKASU_COMMIT="$(resolve_sha https://github.com/edx-sayed-salem/BakaSU.git refs/heads/master)"
             SUKISU_ULTRA_COMMIT="$(pick "$PIN_SUKISU_ULTRA" https://github.com/SukiSU-Ultra/SukiSU-Ultra.git refs/heads/builtin)"
             FINASU_COMMIT="$(pick "$PIN_FINASU" https://github.com/LyraVoid/FinaSU.git refs/heads/master)"
           else
             KERNELSU_COMMIT="$(resolve_sha https://github.com/tiann/KernelSU.git refs/heads/main)"
-            BAKASU_COMMIT="$(resolve_sha https://github.com/Baka-SU/BakaSU.git refs/heads/main)"
+            BAKASU_COMMIT="$(resolve_sha https://github.com/edx-sayed-salem/BakaSU.git refs/heads/master)"
             SUKISU_ULTRA_COMMIT="$(resolve_sha https://github.com/SukiSU-Ultra/SukiSU-Ultra.git refs/heads/main)"
             FINASU_COMMIT="$(resolve_sha https://github.com/LyraVoid/FinaSU.git refs/heads/master)"
           fi
@@ -356,44 +357,16 @@ jobs:
           # (it can only ever run with SUSFS off — enforced below).
           KOWSU_COMMIT="$(resolve_sha https://github.com/KOWX712/KernelSU.git refs/heads/master)"
           emit kowsu_commit "$KOWSU_COMMIT"
-          if [ "$SCHED_SUSFS" = "true" ]; then
-            NEXT_COMMIT="$(resolve_sha https://github.com/pershoot/KernelSU-Next.git refs/heads/dev-susfs)"
-          else
-            NEXT_COMMIT="$(resolve_sha https://github.com/KernelSU-Next/KernelSU-Next.git refs/heads/dev)"
-          fi
+          # Fork: both paths use our KernelSU-Next `master` (upstream dev plus
+          # the 16 KB manager cert pin). Upstream `main` mirrors dev for syncing;
+          # `master` is what kernels are built from.
+          NEXT_COMMIT="$(resolve_sha https://github.com/edx-sayed-salem/KernelSU-Next.git refs/heads/master)"
 
           # The kernel reports 30000 + count(merge-base(KSU HEAD, upstream dev))
-          # -- see .github/actions/root-setup. The manager has to be resolved at
-          # that same upstream commit, not at the fork tip: the fork tip is a
-          # fork-only SHA with no manager CI behind it, and pairing a manager
-          # from a different commit is what let a kernel reporting 33405 sit
-          # next to a manager reporting 33442.
-          if [ "$SCHED_SUSFS" = "true" ]; then
-            # Compare within the fork first: pershoot mirrors upstream dev, and
-            # the path needs no owner:branch colon. Across-repo compare is the
-            # fallback. curl with an explicit token on purpose -- `gh` is not
-            # authenticated inside this job, which silently yielded an empty
-            # base on run 41005208268 and left the pairing to the fallback.
-            NEXT_BASE=""
-            for cmp_url in \
-              "https://api.github.com/repos/pershoot/KernelSU-Next/compare/dev...dev-susfs" \
-              "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/compare/dev...pershoot:dev-susfs"; do
-              NEXT_BASE="$(curl -fsSL --max-time 30 --retry 3 \
-                -H "Authorization: Bearer ${{ github.token }}" \
-                -H "Accept: application/vnd.github+json" \
-                "$cmp_url" 2>/dev/null | jq -r '.merge_base_commit.sha // empty' 2>/dev/null || true)"
-              [[ "${NEXT_BASE:-}" =~ ^[0-9a-f]{40}$ ]] && break
-              NEXT_BASE=""
-            done
-            if [ -z "$NEXT_BASE" ]; then
-              echo "WARNING: could not resolve the pershoot dev-susfs merge base; manager tracks the fork tip" >&2
-              NEXT_BASE="$NEXT_COMMIT"
-            else
-              echo "[+] KernelSU-Next manager base ${NEXT_BASE:0:12} (merge-base with upstream dev)"
-            fi
-          else
-            NEXT_BASE="$NEXT_COMMIT"
-          fi
+          # -- see .github/actions/root-setup. root-setup computes that base
+          # inside our fork (its `dev` still mirrors upstream), so the manager
+          # must be paired at the commit we actually built, not at a live tip.
+          NEXT_BASE="$NEXT_COMMIT"
           emit next_base_commit "$NEXT_BASE"
 
           mk_entry() { # flavor variant commit produce

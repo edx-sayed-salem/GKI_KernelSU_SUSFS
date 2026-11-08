@@ -26,12 +26,16 @@ runs:
             manager="KernelSU Manager"
             ;;
           next)
-            repo="https://github.com/KernelSU-Next/KernelSU-Next.git"
+            # Fork: KernelSU-Next `master` carries the 16 KB manager cert pin in
+            # kernel/Kbuild; `main` still mirrors upstream dev for sync.
+            repo="https://github.com/edx-sayed-salem/KernelSU-Next.git"
             directory="KernelSU-Next"
             manager="KernelSU Next Manager"
             ;;
           bakasu)
-            repo="https://github.com/Baka-SU/BakaSU.git"
+            # Fork: BakaSU `master` carries the 16 KB manager cert pin in
+            # kernel/manager/manager_sign.h; `main` mirrors upstream.
+            repo="https://github.com/edx-sayed-salem/BakaSU.git"
             directory="BakaSU"
             manager="BakaSU Manager"
             ;;

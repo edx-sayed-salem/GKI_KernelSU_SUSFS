@@ -153,34 +153,21 @@ runs:
           [[ "$flavor" == "next-susfs" ]] && mc="$(matrix_commit next)"
           case "$flavor" in
             next)
-              owner="KernelSU-Next"; repo="KernelSU-Next"; wf="build-manager-ci.yml"
-              branch="dev"; want="manager,manager-spoofed"
-              resolve_stock "${mc:-${INPUT_NEXT_COMMIT:-}}" kernelsu_next_commit https://github.com/KernelSU-Next/KernelSU-Next.git dev
-              # With SUSFS on, the matrix carries a pershoot dev-susfs commit --
-              # a fork-only SHA. The kernel reports the version of its merge base
-              # with upstream dev, so pair the manager with that same upstream
-              # commit instead of falling back to an unrelated tip.
-              if [[ "$PINNED" == "1" && -n "$STOCK" ]] \
-                 && [[ -z "$(find_run "$owner" "$repo" "$wf" "$STOCK")" ]]; then
-                if [[ -n "$(find_run pershoot KernelSU-Next "$wf" "$STOCK")" ]]; then
-                  echo "using pershoot fork manager CI for ${STOCK:0:12}" >&2
-                  owner="pershoot"
-                elif [[ "${INPUT_NEXT_COMMIT:-}" =~ ^[0-9a-f]{40}$ && "${INPUT_NEXT_COMMIT}" != "$STOCK" ]] \
-                     && [[ -n "$(find_run "$owner" "$repo" "$wf" "$INPUT_NEXT_COMMIT")" ]]; then
-                  echo "no manager build for ${STOCK:0:12}; using the upstream base ${INPUT_NEXT_COMMIT:0:12} the kernel reports its version from" >&2
-                  STOCK="$INPUT_NEXT_COMMIT"
-                fi
-              fi
+              # Fork build. Managers are built from edx-sayed-salem/KernelSU-Next
+              # `master`, signed with the project keystore, and carry a 16 KB-aligned
+              # libksud.so; upstream's aarch64 libksud is 4 KB and cannot exec on a
+              # 16 KB-page device. The certificate is the pairing constant (the
+              # kernel pins it), so take the latest successful fork build rather
+              # than requiring an exact SHA match with the kernel's root commit.
+              owner="edx-sayed-salem"; repo="KernelSU-Next"; wf="build-manager.yml"
+              branch="master"; want="manager,manager-spoofed"
+              STOCK=""; PINNED=0
               ;;
             next-susfs)
-              owner="pershoot"; repo="KernelSU-Next"; wf="build-manager-ci.yml"
-              branch="dev-susfs"; want="manager,manager-spoofed"
-              resolve_stock "${mc:-${INPUT_NEXT_SUSFS_COMMIT:-}}" kernelsu_next_susfs_commit https://github.com/pershoot/KernelSU-Next.git dev-susfs
-              if [[ -z "$STOCK" && -z "${INPUT_NEXT_SUSFS_COMMIT:-}" ]]; then
-                # pershoot fork unreachable: fall back to upstream dev-susfs tip.
-                echo "pershoot dev-susfs tip not found; trying upstream KernelSU-Next dev-susfs" >&2
-                STOCK="$(resolve_sha https://github.com/KernelSU-Next/KernelSU-Next.git refs/heads/dev-susfs)"
-              fi
+              # Same fork build as `next`; the kernel flavor is still `next`.
+              owner="edx-sayed-salem"; repo="KernelSU-Next"; wf="build-manager.yml"
+              branch="master"; want="manager,manager-spoofed"
+              STOCK=""; PINNED=0
               ;;
             kernelsu)
               owner="tiann"; repo="KernelSU"; wf="build-manager.yml"
@@ -188,9 +175,11 @@ runs:
               resolve_stock "${mc:-${INPUT_KSU_COMMIT:-}}" kernelsu_commit https://github.com/tiann/KernelSU.git main
               ;;
             bakasu)
-              owner="Baka-SU"; repo="BakaSU"; wf="build-manager.yml"
-              branch="main"; want="Manager-release,Spoofed-Manager-release"
-              resolve_stock "${mc:-${INPUT_BAKASU_COMMIT:-}}" bakasu_commit https://github.com/Baka-SU/BakaSU.git main
+              # Fork: BakaSU `master` adds the 16 KB ksud build and pins the
+              # fork manager cert. Latest successful build is cert-stable.
+              owner="edx-sayed-salem"; repo="BakaSU"; wf="build-manager.yml"
+              branch="master"; want="Manager-release"
+              STOCK=""; PINNED=0
               ;;
             sukisu-ultra)
               owner="SukiSU-Ultra"; repo="SukiSU-Ultra"; wf="build-manager.yml"
