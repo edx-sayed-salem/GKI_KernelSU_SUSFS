@@ -15,6 +15,14 @@ on:
           - Pre-Release
           - Release
         default: CI
+      release_tag:
+        description: >-
+          Batch release tag shared by every dispatch in one batch (e.g. r23 or r23-16k).
+          Leave empty to auto-increment. A single-family run without this publishes NO
+          release: only a full "All" run (or an explicit batch tag) mints one rN/rN-16k.
+        required: false
+        type: string
+        default: ""
       allow_version_mismatch:
         description: "Force-load modules with mismatched symbol versions ( force check_version() to pass )"
         type: boolean
@@ -1332,6 +1340,7 @@ jobs:
       github.event_name == 'workflow_dispatch' &&
       !inputs.test_release_notes &&
       (inputs.release_type == 'Pre-Release' || inputs.release_type == 'Release') &&
+      (inputs.kernel_build_version == 'All' || inputs.kernel_build_version == '' || inputs.release_tag != '') &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     permissions:
@@ -1410,6 +1419,21 @@ jobs:
         id: tag
         if: inputs.release_type != 'CI'
         run: |
+          # Batch tags: every dispatch in one batch passes the same release_tag, so all of
+          # its families land in ONE release instead of each minting its own rN. The
+          # auto-increment path below is only for a full "All" run.
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            NEW_TAG="${{ inputs.release_tag }}"
+            if ! [[ "$NEW_TAG" =~ ^r[0-9]+(-16k)?$ ]]; then
+              echo "invalid release_tag '$NEW_TAG' (expected rN or rN-16k)" >&2
+              exit 1
+            fi
+            echo "Using shared batch release tag: $NEW_TAG"
+            echo "NEW_TAG=$NEW_TAG" >> "$GITHUB_ENV"
+            echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # 16 KB releases use their own rN-16k line so a 4 KB and a 16 KB run can be
           # dispatched together without racing for the same tag (and without either one
           # silently absorbing the other's assets). The 4 KB line stays plain rN.
@@ -1772,7 +1796,12 @@ jobs:
             if [ "$IS_PRERELEASE" = "true" ]; then
               create_args+=(--prerelease)
             fi
-            gh release create "$TAG_NAME" "${create_args[@]}"
+            # A batch's dispatches run in parallel and may race to create the shared tag;
+            # losing that race is fine as long as the release now exists.
+            if ! gh release create "$TAG_NAME" "${create_args[@]}"; then
+              gh release view "$TAG_NAME" >/dev/null 2>&1 || exit 1
+              echo "Release $TAG_NAME was created concurrently; continuing with uploads."
+            fi
           fi
 
           # Sequential uploads: one asset at a time with per-file retries.

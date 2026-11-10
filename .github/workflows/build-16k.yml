@@ -98,13 +98,34 @@ jobs:
             esac
           }
 
+          # One release per batch, not per family: every dispatch in this orchestration
+          # shares a computed tag (4 KB and 16 KB are separate lines, as elsewhere).
+          next_tag() {
+            local prefix="$1" latest
+            latest=$(gh api --paginate "repos/${{ github.repository }}/tags?per_page=100" \
+              --jq '.[].name' 2>/dev/null | grep -E "^r[0-9]+${prefix}$" \
+              | sed -E 's/^r([0-9]+).*/\1/' | sort -n | tail -1 || true)
+            echo "r$(( ${latest:-0} + 1 ))${prefix}"
+          }
+          BATCH_4K=""
+          BATCH_16K=""
+          if [ "$INPUT_RELEASE" != "CI" ]; then
+            BATCH_4K="$(next_tag "")"
+            BATCH_16K="$(next_tag "-16k")"
+            echo "Batch release tags: 4K=$BATCH_4K 16K=$BATCH_16K"
+          fi
+
           dispatch() {
             local pages="$1" version="$2" patch="$3" root="$4" susfs="$5" release="$6"
             if [ "$version" = "6.18.x-android17" ] && [ "$susfs" = "true" ]; then
               echo "::warning::SUSFS has no gki-android17-6.18 branch upstream; building $version without SUSFS."
               susfs=false
             fi
-            echo "Dispatching Build Kernels: version=$version page_size=$pages root=$root susfs=$susfs release=$release ref=$(ref_for "$version")"
+            local rtag=""
+            if [ "$release" != "CI" ]; then
+              if [ "$pages" = "16k" ]; then rtag="$BATCH_16K"; else rtag="$BATCH_4K"; fi
+            fi
+            echo "Dispatching Build Kernels: version=$version page_size=$pages root=$root susfs=$susfs release=$release tag=${rtag:-auto} ref=$(ref_for "$version")"
             gh workflow run main.yml \
               --ref "$(ref_for "$version")" \
               -f release_type="$release" \
@@ -113,7 +134,8 @@ jobs:
               -f page_size="$pages" \
               -f root_flavor="$root" \
               -f use_susfs="$susfs" \
-              -f commit_mode=verified
+              -f commit_mode=verified \
+              -f release_tag="$rtag"
           }
 
           supports_16k() {
