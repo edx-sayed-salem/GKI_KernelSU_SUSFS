@@ -80,8 +80,8 @@ on:
           - KowSU
           - FinaSU
           - No Root
-          - All (KernelSU-Next + KernelSU + BakaSU)
-        default: All (KernelSU-Next + KernelSU + BakaSU)
+          - All (KernelSU-Next + BakaSU)
+        default: All (KernelSU-Next + BakaSU)
       use_susfs:
         description: "SUSFS"
         type: boolean
@@ -328,8 +328,9 @@ jobs:
           # (KernelSU-Next / KernelSU / BakaSU / SukiSU-Ultra / KowSU /
           # No Root / All) to internal root-setup flavors (next / kernelsu /
           # bakasu / sukisu-ultra / kowsu / none). 'All' emits a matrix of
-          # the three core root flavors plus each pinned commit; SukiSU-Ultra,
-          # KowSU, and No Root are opt-in only and never part of 'All'.
+          # the two root flavors we ship (next, bakasu) plus each pinned commit;
+          # KernelSU, SukiSU-Ultra, KowSU, and No Root are opt-in only and never
+          # part of 'All'.
           #
           # kernelsu, bakasu, and sukisu-ultra pin in verified mode;
           # KernelSU-Next (next) always builds at latest.
@@ -385,7 +386,7 @@ jobs:
           # label the "All" arm matches below — a bare 'All' fell through to *)
           # and failed the whole job, yet the manager step's All* glob still
           # matched, so the two steps disagreed. Keep these in sync.
-          case "${{ inputs.root_flavor || 'All (KernelSU-Next + KernelSU + BakaSU)' }}" in
+          case "${{ inputs.root_flavor || 'All (KernelSU-Next + BakaSU)' }}" in
             KernelSU)
               echo "root_flavor=kernelsu" >> "$GITHUB_OUTPUT"
               emit root_commit "$KERNELSU_COMMIT"
@@ -430,9 +431,9 @@ jobs:
               ROOT_MATRIX='[{"root_flavor":"none","variant":"NoRoot","root_commit":""}]'
               ROOT_MATRIX="[$(mk_entry none NoRoot "" true)]"
               ;;
-            "All (KernelSU-Next + KernelSU + BakaSU)")
-              # Fan out to all three root variants, each with its pinned commit.
-              ROOT_MATRIX="[$(mk_entry next KernelSU-Next "$NEXT_COMMIT" true),$(mk_entry kernelsu KernelSU "$KERNELSU_COMMIT" false),$(mk_entry bakasu BakaSU "$BAKASU_COMMIT" false)]"
+            "All (KernelSU-Next + BakaSU)")
+              # Fan out to the two root variants we ship, each with its pinned commit.
+              ROOT_MATRIX="[$(mk_entry next KernelSU-Next "$NEXT_COMMIT" true),$(mk_entry bakasu BakaSU "$BAKASU_COMMIT" false)]"
               echo "root_flavor=" >> "$GITHUB_OUTPUT"
               echo "root_commit=" >> "$GITHUB_OUTPUT"
               ;;
@@ -478,7 +479,7 @@ jobs:
         uses: ./.github/actions/resolve-managers
         with:
           root_flavor: ${{ inputs.root_flavor }}
-          all_flavors: next,kernelsu,bakasu
+          all_flavors: next,bakasu
           allow_fallback: 'true'
           root_matrix: ${{ steps.resolve.outputs.root_matrix }}
           next_commit: ${{ steps.resolve.outputs.next_base_commit }}
