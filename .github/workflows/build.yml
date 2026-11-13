@@ -495,6 +495,46 @@ jobs:
       - name: Initialize Config Fragment
         run: touch "${{ github.workspace }}/wild_gki.fragment"
 
+      - name: Verify resolved kernel config (SUSFS)
+        # gki_defconfig edits are requests, not facts: Kconfig silently drops a
+        # symbol whose dependencies are unmet (KSU_SUSFS needs KSU and
+        # THREAD_INFO_IN_TASK). A dropped CONFIG_KSU_SUSFS_* compiles the
+        # SUSFS-conditional branches out, so the build "succeeds" into a kernel
+        # with no SUSFS at all - and the fdinfo/fanotify guard resolves to its
+        # narrow form, which is what broke the 6.6.66 build.
+        # Resolve the defconfig out-of-tree (never touching the build tree) and
+        # fail here, before the ~5 minute compile, with the values printed.
+        if: ${{ contains(inputs.feature_set, 'SUSFS') || inputs.feature_set == 'All' }}
+        working-directory: ${{ github.workspace }}/kernel/common
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/cfgcheck"
+          rm -rf "$OUT"
+          echo "Resolving gki_defconfig out-of-tree into $OUT"
+          make -s ARCH=arm64 O="$OUT" gki_defconfig >"$OUT.log" 2>&1 || {
+            cat "$OUT.log" >&2
+            echo "::error::gki_defconfig did not resolve (see log above)"
+            exit 1
+          }
+          missing=0
+          for k in CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_KSU_SUSFS_SUS_PATH \
+                   CONFIG_KSU_SUSFS_SUS_MOUNT CONFIG_KSU_SUSFS_SUS_KSTAT \
+                   CONFIG_KSU_SUSFS_OPEN_REDIRECT; do
+            if grep -qE "^${k}=y$" "$OUT/.config"; then
+              echo "ok      ${k}=y"
+            else
+              resolved="$(grep -E "^${k}=" "$OUT/.config" || echo "absent from .config")"
+              requested="$(grep -cE "^${k}=y$" arch/arm64/configs/gki_defconfig || true)"
+              echo "::error::${k} requested in gki_defconfig (${requested} line) but resolved as: ${resolved}"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::SUSFS symbols were requested but Kconfig resolved them away - refusing to build a kernel without SUSFS"
+            exit 1
+          fi
+
       - name: Apply Kernel Bypass Hack
         if: ${{ inputs.allow_version_mismatch == 'true' }}
         uses: ./.github/actions/bypass-kernel
