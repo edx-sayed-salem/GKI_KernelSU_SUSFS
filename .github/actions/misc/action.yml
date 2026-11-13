@@ -29,6 +29,12 @@ runs:
           CONFIG_TMPFS_POSIX_ACL=y
           CONFIG_KALLSYMS=y
           CONFIG_KALLSYMS_ALL=y
+          # diag: the emulator guest's prebuilt modules carry Google's genksyms
+          # CRCs, which no current Wild build reproduces (r22-era images do).
+          # Without CONFIG_MODVERSIONS the kernel exports no CRC table, so
+          # check_version() accepts those modules instead of failing them
+          # with 'disagrees about version of symbol ...' and panicking init.
+          CONFIG_MODVERSIONS=n
           CONFIG_FANOTIFY=y
           CONFIG_FANOTIFY_ACCESS_PERMISSIONS=y
           
