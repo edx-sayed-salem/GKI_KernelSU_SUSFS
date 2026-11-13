@@ -116,7 +116,7 @@ jobs:
         uses: ./.github/actions/resolve-managers
         with:
           root_flavor: ${{ inputs.root_flavor }}
-          all_flavors: next,next-susfs,kernelsu,bakasu
+          all_flavors: next,bakasu
           allow_fallback: 'false'
           next_commit: ${{ inputs.kernelsu_next_commit }}
           next_susfs_commit: ${{ inputs.kernelsu_next_susfs_commit }}
