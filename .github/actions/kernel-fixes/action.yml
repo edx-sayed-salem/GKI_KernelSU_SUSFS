@@ -139,3 +139,34 @@ runs:
         else
           echo "- selinux_hide.c 6.6+ pointer-bool fix: not applicable" >> "$SUMMARY_FILE"
         fi
+
+    - name: 'Force Android netlink policy flags (RTM_GETLINK / RTM_GETNEIGH)'
+      # Android's SELinux policy carries two config bits (android_netlink_route and
+      # android_netlink_getneigh) that make the kernel require nlmsg_readpriv for
+      # RTM_GETLINK and nlmsg_getneigh for RTM_GETNEIGH{TBL}. They live in the policy
+      # image; a policy that lacks them falls back to nlmsg_read, which apps hold, so
+      # interface MACs and the neighbour table leak where AOSP/CTS expect EACCES.
+      # Force both at policy load so the boundary holds regardless of the policy blob.
+      working-directory: ${{ github.workspace }}/kernel/common
+      shell: bash
+      run: |
+        set -euo pipefail
+        F="security/selinux/ss/services.c"
+        if [ ! -f "$F" ]; then
+          echo "[-] $F not found; netlink policy flags left untouched"
+          exit 0
+        fi
+        python3 - "$F" <<'PY'
+        import re, sys
+        path = sys.argv[1]
+        src = open(path).read()
+        out = re.sub(r"(android_netlink_route\s*[=,]\s*)p->android_netlink_route", r"\1true", src)
+        out = re.sub(r"(android_netlink_getneigh\s*[=,]\s*)p->android_netlink_getneigh", r"\1true", out)
+        if out == src:
+            print("[-] android_netlink_* assignment not found (kernel lacks b4563881284b?)")
+            sys.exit(0)
+        open(path, "w").write(out)
+        for line in out.splitlines():
+            if "android_netlink_route" in line or "android_netlink_getneigh" in line:
+                print("[+] " + line.strip())
+        PY
