@@ -97,6 +97,7 @@ runs:
           fi
           tools/bazel build \
             --config=fast \
+            --kmi_symbol_list_strict_mode=false \
             "${PAGE_SIZE_FLAGS[@]}" \
             --disk_cache=/home/runner/.cache/bazel \
             "$BAZEL_TARGET"
