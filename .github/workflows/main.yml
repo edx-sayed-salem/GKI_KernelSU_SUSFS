@@ -280,7 +280,7 @@ jobs:
             [susfs_commit_android13_5_15]="fe943d15ec6a1891f7a360bf210589bdffe4e318"
             [susfs_commit_android14_5_15]="10751e3c83f6e63f886cd2af937fd0a34463824b"
             [susfs_commit_android14_6_1]="69b8e734920b8f9ed885ab8d112969719698e242"
-            [susfs_commit_android15_6_6]="c7f670f57b7d43d75066b6657f8aee9cdf580d96"
+            [susfs_commit_android15_6_6]="0606e19afae93ffc88e53883dbf3cfced62a7b59"
             [susfs_commit_android16_6_12]="395a8c0c88d348e9fe7c14f66a456fde4653287c"
           )
           # BakaSU keeps its own SUSFS pin set (kept separate so it can diverge
@@ -291,7 +291,7 @@ jobs:
             [susfs_commit_android13_5_15]="fe943d15ec6a1891f7a360bf210589bdffe4e318"
             [susfs_commit_android14_5_15]="10751e3c83f6e63f886cd2af937fd0a34463824b"
             [susfs_commit_android14_6_1]="69b8e734920b8f9ed885ab8d112969719698e242"
-            [susfs_commit_android15_6_6]="c7f670f57b7d43d75066b6657f8aee9cdf580d96"
+            [susfs_commit_android15_6_6]="0606e19afae93ffc88e53883dbf3cfced62a7b59"
             [susfs_commit_android16_6_12]="395a8c0c88d348e9fe7c14f66a456fde4653287c"
           )
           # SukiSU-Ultra keeps its own SUSFS pin set too (same starting values).
@@ -301,7 +301,7 @@ jobs:
             [susfs_commit_android13_5_15]="fe943d15ec6a1891f7a360bf210589bdffe4e318"
             [susfs_commit_android14_5_15]="10751e3c83f6e63f886cd2af937fd0a34463824b"
             [susfs_commit_android14_6_1]="69b8e734920b8f9ed885ab8d112969719698e242"
-            [susfs_commit_android15_6_6]="c7f670f57b7d43d75066b6657f8aee9cdf580d96"
+            [susfs_commit_android15_6_6]="0606e19afae93ffc88e53883dbf3cfced62a7b59"
             [susfs_commit_android16_6_12]="395a8c0c88d348e9fe7c14f66a456fde4653287c"
           )
 
@@ -369,7 +369,7 @@ jobs:
           # Fork: both paths use our KernelSU-Next `master` (upstream dev plus
           # the 16 KB manager cert pin). Upstream `main` mirrors dev for syncing;
           # `master` is what kernels are built from.
-          NEXT_COMMIT="$(resolve_sha https://github.com/edx-sayed-salem/KernelSU-Next.git refs/heads/master)"
+          NEXT_COMMIT="4776e7cd67663a532ca49ec9523cc6e9739d6cf2"  # pinned: matches the r7/validated-pin module ABI
 
           # The kernel reports 30000 + count(merge-base(KSU HEAD, upstream dev))
           # -- see .github/actions/root-setup. root-setup computes that base
