@@ -79,6 +79,9 @@ runs:
           build/build.sh -j"$(nproc)"
         else
           sed -i '/name = "kernel_aarch64",/a\    check_defconfig = "disabled",' common/BUILD.bazel
+          # CONFIG_MODVERSIONS=n changes the exported symbol set; the strict KMI
+          # symbol-list check is an attribute of this target, not a bazel flag.
+          sed -i '/name = "kernel_aarch64",/a\    kmi_symbol_list_strict_mode = False,' common/BUILD.bazel
           PAGE_SIZE_FLAGS=()
           if [ "$PAGE_SIZE" = "16k" ]; then
             PAGE_SIZE_FLAGS+=(--page_size=16k)
@@ -97,7 +100,6 @@ runs:
           fi
           tools/bazel build \
             --config=fast \
-            --kmi_symbol_list_strict_mode=false \
             "${PAGE_SIZE_FLAGS[@]}" \
             --disk_cache=/home/runner/.cache/bazel \
             "$BAZEL_TARGET"
