@@ -31,6 +31,7 @@
 #include <linux/sched/task.h>
 #include <linux/mm.h>
 #include <linux/mm_types.h>
+#include <linux/mman.h>
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/namei.h>
