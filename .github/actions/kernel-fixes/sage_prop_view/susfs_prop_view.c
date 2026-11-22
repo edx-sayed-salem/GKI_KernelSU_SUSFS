@@ -75,7 +75,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 	struct sage_pv_work *w = container_of(cb, struct sage_pv_work, cb);
 	struct mm_struct *mm = current->mm;
 	struct sage_pv_hit *hits;
-	struct cred *root;
+	const struct cred *root;
 	char *path;
 	struct vm_area_struct *vma;
 	int n = 0, i;
@@ -133,14 +133,9 @@ static void sage_pv_task_work(struct callback_head *cb)
 	mmap_read_unlock(mm);
 	pr_info_ratelimited("sage_prop_view: collected %d area(s)\n", n);
 
-	/* 6.6 requires a real daemon (WARN_ON_ONCE(!daemon)); init_task gives init creds, and one
-	 * cred per callback is enough for both the open and the mmap. */
-	root = prepare_kernel_cred(&init_task);
-	if (!root) {
-		kfree(path);
-		kfree(hits);
-		return;
-	}
+	/* init creds for the open and the mmap. get_task_cred() is a refcount bump on init_task's
+	 * creds, so it cannot fail (prepare_kernel_cred allocates, and returned NULL here). */
+	root = get_task_cred(&init_task);
 
 	for (i = 0; i < n; i++) {
 		struct file *f;
