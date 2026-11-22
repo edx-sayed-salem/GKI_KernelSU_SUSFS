@@ -36,6 +36,7 @@
 #include <linux/fs.h>
 #include <linux/namei.h>
 #include <linux/cred.h>
+#include <linux/init_task.h>
 #include <linux/task_work.h>
 #include <linux/slab.h>
 #include <linux/string.h>
@@ -74,6 +75,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 	struct sage_pv_work *w = container_of(cb, struct sage_pv_work, cb);
 	struct mm_struct *mm = current->mm;
 	struct sage_pv_hit *hits;
+	struct cred *root;
 	char *path;
 	struct vm_area_struct *vma;
 	int n = 0, i;
@@ -129,21 +131,25 @@ static void sage_pv_task_work(struct callback_head *cb)
 	}
 	mmap_read_unlock(mm);
 
+	/* 6.6 requires a real daemon (WARN_ON_ONCE(!daemon)); init_task gives init creds, and one
+	 * cred per callback is enough for both the open and the mmap. */
+	root = prepare_kernel_cred(&init_task);
+	if (!root) {
+		kfree(path);
+		kfree(hits);
+		return;
+	}
+
 	for (i = 0; i < n; i++) {
 		struct file *f;
 		const struct cred *saved;
-		struct cred *root;
 		unsigned long addr;
 
 		snprintf(path, PATH_MAX, SAGE_PROP_VIEW_DIR "/%s", hits[i].name);
 
-		root = prepare_kernel_cred(NULL);
-		if (!root)
-			break;
 		saved = override_creds(root);
 		f = filp_open(path, O_RDONLY | O_LARGEFILE, 0);
 		revert_creds(saved);
-		put_cred(root);
 
 		if (IS_ERR(f))
 			continue;
@@ -155,16 +161,10 @@ static void sage_pv_task_work(struct callback_head *cb)
 			continue;
 		}
 
-		root = prepare_kernel_cred(NULL);
-		if (!root) {
-			fput(f);
-			break;
-		}
 		saved = override_creds(root);
 		addr = vm_mmap(f, hits[i].start, hits[i].len, PROT_READ,
 			       MAP_SHARED | MAP_FIXED, 0);
 		revert_creds(saved);
-		put_cred(root);
 
 		if (addr != hits[i].start)
 			pr_warn_ratelimited("sage_prop_view: vm_mmap %s at %#lx failed %ld\n",
@@ -172,6 +172,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 		fput(f);
 	}
 
+	put_cred(root);
 	kfree(path);
 	kfree(hits);
 }
