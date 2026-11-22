@@ -49,7 +49,7 @@
 #define SAGE_PROP_VIEW_DIR "/data/misc/sage/propview"
 #define SAGE_PROP_VIEW_AREAS_PARENT "__properties__"
 #define SAGE_PROP_VIEW_COPY_PARENT "propview"
-#define SAGE_PROP_VIEW_HITS 16
+#define SAGE_PROP_VIEW_HITS 128
 
 struct sage_pv_hit {
 	unsigned long start;
