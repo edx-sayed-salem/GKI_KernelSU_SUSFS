@@ -180,3 +180,13 @@ runs:
         set -euo pipefail
         python3 "${{ github.workspace }}/.github/actions/kernel-fixes/sage_taint_exempt.py" kernel/module/main.c
         grep -n "sage_vendor_module" kernel/module/main.c
+
+    - name: 'SAGE: prop_view (app-scoped property-area copy)'
+      if: inputs.version == 'android15-6.6'
+      working-directory: ${{ github.workspace }}/kernel/common
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 "${{ github.workspace }}/.github/actions/kernel-fixes/sage_prop_view.py" .
+        grep -n "sage_prop_view_queue" kernel/sys.c
+        grep -n "susfs_prop_view" fs/Makefile
