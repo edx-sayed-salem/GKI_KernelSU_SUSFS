@@ -73,13 +73,24 @@ static void sage_pv_task_work(struct callback_head *cb)
 {
 	struct sage_pv_work *w = container_of(cb, struct sage_pv_work, cb);
 	struct mm_struct *mm = current->mm;
-	struct sage_pv_hit hits[SAGE_PROP_VIEW_HITS];
+	struct sage_pv_hit *hits;
+	char *path;
 	struct vm_area_struct *vma;
 	int n = 0, i;
 
 	kfree(w);
 	if (!mm)
 		return;
+
+	/* Heap, not stack: 16 hit slots with a NAME_MAX name each plus PATH_MAX would blow
+	 * the 2 KB kernel stack-frame limit under -Wframe-larger-than. */
+	hits = kzalloc(sizeof(*hits) * SAGE_PROP_VIEW_HITS, GFP_KERNEL);
+	path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!hits || !path) {
+		kfree(hits);
+		kfree(path);
+		return;
+	}
 
 	mmap_read_lock(mm);
 	VMA_ITERATOR(vmi, mm, 0);
@@ -113,17 +124,16 @@ static void sage_pv_task_work(struct callback_head *cb)
 	mmap_read_unlock(mm);
 
 	for (i = 0; i < n; i++) {
-		char path[PATH_MAX];
 		struct file *f;
 		const struct cred *saved;
 		struct cred *root;
 		unsigned long addr;
 
-		snprintf(path, sizeof(path), SAGE_PROP_VIEW_DIR "/%s", hits[i].name);
+		snprintf(path, PATH_MAX, SAGE_PROP_VIEW_DIR "/%s", hits[i].name);
 
 		root = prepare_kernel_cred(NULL);
 		if (!root)
-			return;
+			break;
 		saved = override_creds(root);
 		f = filp_open(path, O_RDONLY | O_LARGEFILE, 0);
 		revert_creds(saved);
@@ -142,7 +152,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 		root = prepare_kernel_cred(NULL);
 		if (!root) {
 			fput(f);
-			return;
+			break;
 		}
 		saved = override_creds(root);
 		addr = vm_mmap(f, hits[i].start, hits[i].len, PROT_READ,
@@ -155,6 +165,9 @@ static void sage_pv_task_work(struct callback_head *cb)
 					    path, hits[i].start, (long)addr);
 		fput(f);
 	}
+
+	kfree(path);
+	kfree(hits);
 }
 
 void sage_prop_view_queue(void)
