@@ -81,6 +81,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 	int n = 0, i;
 
 	kfree(w);
+	pr_info_ratelimited("sage_prop_view: cb uid=%u mm=%d\n", current_uid().val, mm ? 1 : 0);
 	if (!mm)
 		return;
 	/* The syscall entry runs before the creds change, so the app uid is only visible here,
@@ -130,6 +131,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 		n++;
 	}
 	mmap_read_unlock(mm);
+	pr_info_ratelimited("sage_prop_view: collected %d area(s)\n", n);
 
 	/* 6.6 requires a real daemon (WARN_ON_ONCE(!daemon)); init_task gives init creds, and one
 	 * cred per callback is enough for both the open and the mmap. */
@@ -184,6 +186,7 @@ void sage_prop_view_queue(void)
 	if (!current->mm)
 		return;
 
+	pr_info_ratelimited("sage_prop_view: queue uid=%u\n", current_uid().val);
 	w = kzalloc(sizeof(*w), GFP_KERNEL);
 	if (!w)
 		return;
