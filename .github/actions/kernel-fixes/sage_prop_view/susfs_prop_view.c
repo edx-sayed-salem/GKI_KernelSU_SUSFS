@@ -153,8 +153,12 @@ static void sage_pv_task_work(struct callback_head *cb)
 		f = filp_open(path, O_RDONLY | O_LARGEFILE, 0);
 		revert_creds(saved);
 
-		if (IS_ERR(f))
+		if (IS_ERR(f)) {
+			pr_warn_ratelimited("sage_prop_view: open %s failed %ld\n",
+					    path, (long)PTR_ERR(f));
 			continue;
+		}
+		pr_info_ratelimited("sage_prop_view: hit %s len=%lu\n", path, hits[i].len);
 		if ((unsigned long)i_size_read(file_inode(f)) != hits[i].len) {
 			pr_warn_ratelimited("sage_prop_view: %s is %lld bytes, VMA is %lu\n",
 					    path, (long long)i_size_read(file_inode(f)),
