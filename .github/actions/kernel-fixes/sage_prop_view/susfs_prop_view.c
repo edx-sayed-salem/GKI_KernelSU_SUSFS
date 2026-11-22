@@ -81,6 +81,10 @@ static void sage_pv_task_work(struct callback_head *cb)
 	kfree(w);
 	if (!mm)
 		return;
+	/* The syscall entry runs before the creds change, so the app uid is only visible here,
+	 * after the kernel applied it and before returning to userspace. */
+	if (current_uid().val < 10000)
+		return;
 
 	/* Heap, not stack: 16 hit slots with a NAME_MAX name each plus PATH_MAX would blow
 	 * the 2 KB kernel stack-frame limit under -Wframe-larger-than. */
@@ -107,6 +111,8 @@ static void sage_pv_task_work(struct callback_head *cb)
 		if (sage_pv_parent_is(d, SAGE_PROP_VIEW_COPY_PARENT))
 			continue;
 		if (!sage_pv_parent_is(d, SAGE_PROP_VIEW_AREAS_PARENT))
+			continue;
+		if (strncmp(d->d_name.name, "u:object_r:", 11) != 0)
 			continue;
 
 		len = strlen(d->d_name.name);
@@ -174,9 +180,6 @@ void sage_prop_view_queue(void)
 {
 	struct sage_pv_work *w;
 
-	/* Only app processes get a view; root, shell, zygote itself are untouched. */
-	if (current_uid().val < 10000)
-		return;
 	if (!current->mm)
 		return;
 
