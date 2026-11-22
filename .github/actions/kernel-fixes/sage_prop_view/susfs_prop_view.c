@@ -81,7 +81,6 @@ static void sage_pv_task_work(struct callback_head *cb)
 	int n = 0, i;
 
 	kfree(w);
-	pr_info_ratelimited("sage_prop_view: cb uid=%u mm=%d\n", current_uid().val, mm ? 1 : 0);
 	if (!mm)
 		return;
 	/* The syscall entry runs before the creds change, so the app uid is only visible here,
@@ -131,7 +130,6 @@ static void sage_pv_task_work(struct callback_head *cb)
 		n++;
 	}
 	mmap_read_unlock(mm);
-	pr_info_ratelimited("sage_prop_view: collected %d area(s)\n", n);
 
 	/* init creds for the open and the mmap. get_task_cred() is a refcount bump on init_task's
 	 * creds, so it cannot fail (prepare_kernel_cred allocates, and returned NULL here). */
@@ -153,7 +151,6 @@ static void sage_pv_task_work(struct callback_head *cb)
 					    path, (long)PTR_ERR(f));
 			continue;
 		}
-		pr_info_ratelimited("sage_prop_view: hit %s len=%lu\n", path, hits[i].len);
 		if ((unsigned long)i_size_read(file_inode(f)) != hits[i].len) {
 			pr_warn_ratelimited("sage_prop_view: %s is %lld bytes, VMA is %lu\n",
 					    path, (long long)i_size_read(file_inode(f)),
@@ -185,7 +182,6 @@ void sage_prop_view_queue(void)
 	if (!current->mm)
 		return;
 
-	pr_info_ratelimited("sage_prop_view: queue uid=%u\n", current_uid().val);
 	w = kzalloc(sizeof(*w), GFP_KERNEL);
 	if (!w)
 		return;
