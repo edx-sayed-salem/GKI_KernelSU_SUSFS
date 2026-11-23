@@ -267,7 +267,7 @@ jobs:
           sublevel: ${{ steps.extract.outputs.sublevel }}
           root_flavor: ${{ inputs.root_flavor }}
 
-      - name: SAGE prop_view (app-scoped property-area copy)
+      - name: prop_view (app-scoped property-area copy)
         # Must run AFTER SUSFS: the trigger is the ksu_handle_setresuid call the SUSFS patch
         # adds inside __sys_setresuid, and the file it edits does not exist before that.
         if: (contains(inputs.feature_set, 'SUSFS') || inputs.feature_set == 'All') && inputs.version == 'android15-6.6'
