@@ -12,7 +12,13 @@ missing anchor so an upstream change fails the build instead of silently doing n
 """
 import sys
 
-HELPER = '''/*
+HELPER = '''/* Single source of truth for the out-of-tree opt-in key. Modules emit it with
+ * MODULE_INFO(platform_module, "1"); MODULE_INFO stringifies its tag token, so this define cannot
+ * rename the module side -- a tag change means editing this line, rebuilding the kernel, and
+ * rebuilding the modules with the new key. */
+#define PLATFORM_MODULE_TAG "platform_module"
+
+/*
  * Platform: the emulator SDK image ships its vendor modules prebuilt and unsigned, so they can
  * never carry the "intree" tag. Treat that known set as part of the platform instead of
  * tainting the kernel; anything else out-of-tree still raises TAINT_OOT_MODULE, so the bit
@@ -34,7 +40,7 @@ static bool platform_module_trusted(const char *name, struct load_info *info)
 \tfor (i = 0; i < ARRAY_SIZE(names); i++)
 \t\tif (!strcmp(name, names[i]))
 \t\t\treturn true;
-\tif (get_modinfo(info, "platform_module"))
+\tif (get_modinfo(info, PLATFORM_MODULE_TAG))
 \t\treturn true;
 \treturn false;
 }
