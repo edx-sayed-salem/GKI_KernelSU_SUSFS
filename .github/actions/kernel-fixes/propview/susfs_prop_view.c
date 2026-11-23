@@ -46,11 +46,10 @@
 
 #include <linux/propview.h>
 
-/* DEFERRED: the directory is still the historical /data/misc/sage/propview because the userspace
- * staging path (the Zygisk cloak's PV_DIR) and every already-staged payload use it. Renaming it to
- * a neutral /data/misc/propview is a coordinated kernel+module change with a payload migration and
- * was deliberately left for a later pass; keep the two in sync until then. */
-#define PROPVIEW_DIR "/data/misc/sage/propview"
+/* Neutral copy directory, shared with the userspace stager that builds it (the Zygisk cloak's
+ * PV_DIR). Keep the two in sync; a kernel built without the matching module finds no copies and
+ * leaves prop_view inert. */
+#define PROPVIEW_DIR "/data/misc/propview"
 #define PROPVIEW_AREAS_PARENT "__properties__"
 #define PROPVIEW_COPY_PARENT "propview"
 #define PROPVIEW_HITS 128
