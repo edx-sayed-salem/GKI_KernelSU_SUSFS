@@ -54,6 +54,21 @@
 #define PROPVIEW_COPY_PARENT "propview"
 #define PROPVIEW_HITS 128
 
+/* Copies are named by a hash of the live area's basename, not by the SELinux context name. An app
+ * can read its own map line in /proc/self/maps, and some context names are tells themselves
+ * (qemu_sf_lcd_density_prop, vendor_qemu_prop). The stager (sage-propview-omit -hash-names) and the
+ * open-redirect module must use the same algorithm: FNV-1a 32-bit, lowercase %08x. */
+static u32 pv_hash(const char *s, size_t n)
+{
+	u32 h = 2166136261u;
+
+	while (n--) {
+		h ^= (u8)*s++;
+		h *= 16777619u;
+	}
+	return h;
+}
+
 struct pv_hit {
 	unsigned long start;
 	unsigned long len;
@@ -143,7 +158,8 @@ static void pv_task_work(struct callback_head *cb)
 		const struct cred *saved;
 		unsigned long addr;
 
-		snprintf(path, PATH_MAX, PROPVIEW_DIR "/%s", hits[i].name);
+		snprintf(path, PATH_MAX, PROPVIEW_DIR "/%08x",
+			 pv_hash(hits[i].name, strlen(hits[i].name)));
 
 		saved = override_creds(root);
 		f = filp_open(path, O_RDONLY | O_LARGEFILE, 0);
@@ -227,7 +243,7 @@ void propview_after_mmap(struct file *file, unsigned long addr, unsigned long le
 	path = kmalloc(PATH_MAX, GFP_KERNEL);
 	if (!path)
 		return;
-	snprintf(path, PATH_MAX, PROPVIEW_DIR "/%s", name);
+	snprintf(path, PATH_MAX, PROPVIEW_DIR "/%08x", pv_hash(name, strlen(name)));
 
 	root = get_task_cred(&init_task);
 	saved = override_creds(root);
