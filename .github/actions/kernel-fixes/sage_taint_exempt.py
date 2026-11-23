@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make the kernel treat the emulator SDK's prebuilt vendor modules -- and SAGE's tagged OOT\nmodules -- as platform modules.
+"""Make the kernel treat the emulator SDK's prebuilt vendor modules -- and tagged OOT modules --\nas platform modules.
 
 Why: the system image ships goldfish_*, v4l2loopback, virtio-media and vkms as prebuilt
 (and unsigned) modules. They can never carry the "intree" modinfo tag, so every boot raises
@@ -13,17 +13,17 @@ missing anchor so an upstream change fails the build instead of silently doing n
 import sys
 
 HELPER = '''/*
- * SAGE: the emulator SDK image ships its vendor modules prebuilt and unsigned, so they can
+ * Platform: the emulator SDK image ships its vendor modules prebuilt and unsigned, so they can
  * never carry the "intree" tag. Treat that known set as part of the platform instead of
  * tainting the kernel; anything else out-of-tree still raises TAINT_OOT_MODULE, so the bit
  * keeps its meaning for unknown modules.
  *
- * SAGE's own out-of-tree modules opt in with MODULE_INFO(sage_trusted, "1"). This is an explicit
- * marker, not a security control -- root can load anything and can forge the tag -- but it lets an
- * experimental LKM be tried without another kernel rebuild, and it stays auditable by grepping the
- * module's .modinfo. A module that does not claim it still taints.
+ * Out-of-tree modules that are part of this platform opt in with MODULE_INFO(platform_module, "1").
+ * This is an explicit marker, not a security control -- root can load anything and can forge the
+ * tag -- but it lets an experimental LKM be tried without another kernel rebuild, and it stays
+ * auditable by grepping the module's .modinfo. A module that does not claim it still taints.
  */
-static bool sage_vendor_module(const char *name, struct load_info *info)
+static bool platform_module_trusted(const char *name, struct load_info *info)
 {
 \tstatic const char *const names[] = {
 \t\t"goldfish_address_space", "goldfish_pipe", "goldfish_sync",
@@ -34,7 +34,7 @@ static bool sage_vendor_module(const char *name, struct load_info *info)
 \tfor (i = 0; i < ARRAY_SIZE(names); i++)
 \t\tif (!strcmp(name, names[i]))
 \t\t\treturn true;
-\tif (get_modinfo(info, "sage_trusted"))
+\tif (get_modinfo(info, "platform_module"))
 \t\treturn true;
 \treturn false;
 }
@@ -43,14 +43,17 @@ static bool sage_vendor_module(const char *name, struct load_info *info)
 
 ANCHOR = 'static void module_augment_kernel_taints(struct module *mod, struct load_info *info)'
 OLD_COND = '\tif (!get_modinfo(info, "intree")) {'
-NEW_COND = '\tif (!get_modinfo(info, "intree") && !sage_vendor_module(mod->name, info)) {'
+NEW_COND = '\tif (!get_modinfo(info, "intree") && !platform_module_trusted(mod->name, info)) {'
 
 
 def main(path: str) -> int:
     src = open(path).read()
 
-    if 'sage_vendor_module' in src:
+    if 'platform_module_trusted' in src:
         print('already patched: %s' % path)
+        return 0
+    if 'sage_vendor_module' in src:
+        print('already patched (legacy name): %s' % path)
         return 0
 
     if src.count(ANCHOR) != 1:
