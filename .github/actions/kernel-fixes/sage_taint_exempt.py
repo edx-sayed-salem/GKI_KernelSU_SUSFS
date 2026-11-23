@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make the kernel treat the emulator SDK's prebuilt vendor modules as platform modules.
+"""Make the kernel treat the emulator SDK's prebuilt vendor modules -- and SAGE's tagged OOT\nmodules -- as platform modules.
 
 Why: the system image ships goldfish_*, v4l2loopback, virtio-media and vkms as prebuilt
 (and unsigned) modules. They can never carry the "intree" modinfo tag, so every boot raises
@@ -17,8 +17,13 @@ HELPER = '''/*
  * never carry the "intree" tag. Treat that known set as part of the platform instead of
  * tainting the kernel; anything else out-of-tree still raises TAINT_OOT_MODULE, so the bit
  * keeps its meaning for unknown modules.
+ *
+ * SAGE's own out-of-tree modules opt in with MODULE_INFO(sage_trusted, "1"). This is an explicit
+ * marker, not a security control -- root can load anything and can forge the tag -- but it lets an
+ * experimental LKM be tried without another kernel rebuild, and it stays auditable by grepping the
+ * module's .modinfo. A module that does not claim it still taints.
  */
-static bool sage_vendor_module(const char *name)
+static bool sage_vendor_module(const char *name, struct load_info *info)
 {
 \tstatic const char *const names[] = {
 \t\t"goldfish_address_space", "goldfish_pipe", "goldfish_sync",
@@ -29,6 +34,8 @@ static bool sage_vendor_module(const char *name)
 \tfor (i = 0; i < ARRAY_SIZE(names); i++)
 \t\tif (!strcmp(name, names[i]))
 \t\t\treturn true;
+\tif (get_modinfo(info, "sage_trusted"))
+\t\treturn true;
 \treturn false;
 }
 
@@ -36,7 +43,7 @@ static bool sage_vendor_module(const char *name)
 
 ANCHOR = 'static void module_augment_kernel_taints(struct module *mod, struct load_info *info)'
 OLD_COND = '\tif (!get_modinfo(info, "intree")) {'
-NEW_COND = '\tif (!get_modinfo(info, "intree") && !sage_vendor_module(mod->name)) {'
+NEW_COND = '\tif (!get_modinfo(info, "intree") && !sage_vendor_module(mod->name, info)) {'
 
 
 def main(path: str) -> int:

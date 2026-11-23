@@ -189,3 +189,67 @@ void sage_prop_view_queue(void)
 	if (task_work_add(current, &w->cb, TWA_RESUME))
 		kfree(w);
 }
+
+/*
+ * Late mappings: bionic maps each property area on first use, and an app typically touches several
+ * areas only after specialization. The setresuid task_work cannot see those, so the app would keep
+ * reading the live area for them. ksys_mmap_pgoff calls this right after a successful mmap with the
+ * file the app mapped; if it is a live property area with a staged copy, remap that exact range
+ * onto the copy (MAP_FIXED), which is the same substitution the task_work performs.
+ *
+ * Runs in the app's own syscall context before returning to userspace, so there is no window in
+ * which the app can read the live area. Non-app uids are skipped: the copy is only ever mapped for
+ * uid >= 10000 (services must keep the real values -- ro.boot.qemu gates the USB gadget path).
+ */
+void sage_prop_view_after_mmap(struct file *file, unsigned long addr, unsigned long len)
+{
+	const struct cred *root, *saved;
+	struct file *copy;
+	unsigned long got;
+	const char *name;
+	struct dentry *d;
+	char *path;
+
+	if (!file || !len || (long)addr < 0)
+		return;
+	if (current_uid().val < 10000)
+		return;
+	d = file->f_path.dentry;
+	if (!sage_pv_parent_is(d, SAGE_PROP_VIEW_AREAS_PARENT))
+		return;
+	name = d->d_name.name;
+	if (strncmp(name, "u:object_r:", 11) != 0 || strlen(name) > NAME_MAX)
+		return;
+
+	path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!path)
+		return;
+	snprintf(path, PATH_MAX, SAGE_PROP_VIEW_DIR "/%s", name);
+
+	root = get_task_cred(&init_task);
+	saved = override_creds(root);
+	copy = filp_open(path, O_RDONLY | O_LARGEFILE, 0);
+	revert_creds(saved);
+
+	/* No staged copy is the normal case for most contexts: leave the mapping alone. */
+	if (IS_ERR(copy))
+		goto out_cred;
+	if ((unsigned long)i_size_read(file_inode(copy)) != len) {
+		pr_warn_ratelimited("sage_prop_view: %s is %lld bytes, VMA is %lu\n",
+				    path, (long long)i_size_read(file_inode(copy)), len);
+		fput(copy);
+		goto out_cred;
+	}
+
+	saved = override_creds(root);
+	got = vm_mmap(copy, addr, len, PROT_READ, MAP_SHARED | MAP_FIXED, 0);
+	revert_creds(saved);
+	if (got != addr)
+		pr_warn_ratelimited("sage_prop_view: late vm_mmap %s at %#lx failed %ld\n",
+				    path, addr, (long)got);
+	fput(copy);
+
+out_cred:
+	put_cred(root);
+	kfree(path);
+}

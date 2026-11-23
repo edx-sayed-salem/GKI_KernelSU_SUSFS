@@ -9,4 +9,13 @@
  */
 void sage_prop_view_queue(void);
 
+/*
+ * Remap an app's freshly-mapped live property area onto the staged copy.  bionic maps property
+ * areas lazily, so many first appear AFTER __sys_setresuid's task_work has already run; without
+ * this those areas stay live and their properties remain app-visible.  Called from
+ * ksys_mmap_pgoff with the file the app mapped; a missing copy means "leave it alone".
+ */
+struct file;
+void sage_prop_view_after_mmap(struct file *file, unsigned long addr, unsigned long len);
+
 #endif /* _LINUX_SAGE_PROP_VIEW_H */
