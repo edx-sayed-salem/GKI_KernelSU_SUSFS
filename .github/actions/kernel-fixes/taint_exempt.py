@@ -52,9 +52,6 @@ def main(path: str) -> int:
     if 'platform_module_trusted' in src:
         print('already patched: %s' % path)
         return 0
-    if 'sage_vendor_module' in src:
-        print('already patched (legacy name): %s' % path)
-        return 0
 
     if src.count(ANCHOR) != 1:
         print('ERROR: anchor not found exactly once in %s' % path, file=sys.stderr)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install SAGE prop_view into the synced kernel tree.
+"""Install prop_view into the synced kernel tree.
 
 Why: bionic maps the property areas MAP_SHARED in zygote, so every app inherits the same view.
 This adds a small kernel-side swap (fs/susfs_prop_view.c) that gives an app process its own
@@ -18,7 +18,7 @@ import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "sage_prop_view")
+SRC = os.path.join(HERE, "propview")
 
 INC_ANCHOR = "#include <linux/syscalls.h>"
 CALL_ANCHOR = "(void)ksu_handle_setresuid(ruid, euid, suid);"
@@ -43,8 +43,8 @@ def main(root):
 
     shutil.copy(os.path.join(SRC, "susfs_prop_view.c"),
                 os.path.join(fs, "susfs_prop_view.c"))
-    shutil.copy(os.path.join(SRC, "include", "linux", "sage_prop_view.h"),
-                os.path.join(inc, "sage_prop_view.h"))
+    shutil.copy(os.path.join(SRC, "include", "linux", "propview.h"),
+                os.path.join(inc, "propview.h"))
 
     mk = os.path.join(fs, "Makefile")
     s = open(mk).read()
@@ -53,34 +53,34 @@ def main(root):
     else:
         if not s.endswith("\n"):
             s += "\n"
-        s += "\n# SAGE prop_view (app-scoped property-area copy)\n" + MAKE_LINE + "\n"
+        s += "\n# prop_view (app-scoped property-area copy)\n" + MAKE_LINE + "\n"
         open(mk, "w").write(s)
         print("patched fs/Makefile")
 
     s = open(sysc).read()
-    if "sage_prop_view_queue" in s:
+    if "propview_queue" in s:
         print("kernel/sys.c already calls prop_view")
     else:
         if s.count(CALL_ANCHOR) != 1:
             return fail("setresuid anchor not found exactly once in kernel/sys.c")
         if s.count(INC_ANCHOR) != 1:
             return fail("include anchor not found exactly once in kernel/sys.c")
-        s = s.replace(INC_ANCHOR, INC_ANCHOR + "\n#include <linux/sage_prop_view.h>", 1)
-        s = s.replace(CALL_ANCHOR, CALL_ANCHOR + "\n\tsage_prop_view_queue();", 1)
+        s = s.replace(INC_ANCHOR, INC_ANCHOR + "\n#include <linux/propview.h>", 1)
+        s = s.replace(CALL_ANCHOR, CALL_ANCHOR + "\n\tpropview_queue();", 1)
         open(sysc, "w").write(s)
         print("patched kernel/sys.c")
 
     # Late property mappings: bionic maps areas lazily, so the setresuid pass misses them.
     ms = open(mmapc).read()
-    if "sage_prop_view_after_mmap" in ms:
+    if "propview_after_mmap" in ms:
         print("mm/mmap.c already calls prop_view")
         return 0
     if ms.count(MM_INC_ANCHOR) != 1:
         return fail("include anchor not found exactly once in mm/mmap.c")
     if ms.count(MM_CALL_ANCHOR) != 1:
         return fail("mmap anchor not found exactly once in mm/mmap.c")
-    ms = ms.replace(MM_INC_ANCHOR, MM_INC_ANCHOR + "\n#include <linux/sage_prop_view.h>", 1)
-    ms = ms.replace(MM_CALL_ANCHOR, MM_CALL_ANCHOR + "\n#ifdef CONFIG_KSU_SUSFS\n\tsage_prop_view_after_mmap(file, retval, len);\n#endif", 1)
+    ms = ms.replace(MM_INC_ANCHOR, MM_INC_ANCHOR + "\n#include <linux/propview.h>", 1)
+    ms = ms.replace(MM_CALL_ANCHOR, MM_CALL_ANCHOR + "\n#ifdef CONFIG_KSU_SUSFS\n\tpropview_after_mmap(file, retval, len);\n#endif", 1)
     open(mmapc, "w").write(ms)
     print("patched mm/mmap.c")
     return 0

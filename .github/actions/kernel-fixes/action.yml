@@ -178,5 +178,5 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        python3 "${{ github.workspace }}/.github/actions/kernel-fixes/sage_taint_exempt.py" kernel/module/main.c
+        python3 "${{ github.workspace }}/.github/actions/kernel-fixes/taint_exempt.py" kernel/module/main.c
         grep -n "platform_module_trusted" kernel/module/main.c

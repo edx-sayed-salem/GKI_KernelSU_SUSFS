@@ -275,8 +275,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 "${{ github.workspace }}/.github/actions/kernel-fixes/sage_prop_view.py" .
-          grep -n "sage_prop_view_queue" kernel/sys.c
+          python3 "${{ github.workspace }}/.github/actions/kernel-fixes/propview.py" .
+          grep -n "propview_queue" kernel/sys.c
           grep -n "susfs_prop_view" fs/Makefile
 
       - name: Baseband Guard

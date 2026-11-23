@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * SAGE prop_view: give an app process its own Android property-area view.
+ * prop_view: give an app process its own Android property-area view.
  *
  * bionic maps each property area (/dev/__properties__/<ctx>, 128 KB) MAP_SHARED PROT_READ in
  * zygote, before fork, so every app inherits the same mappings.  To give an app a different
@@ -16,7 +16,7 @@
  * so the copy for a context is looked up by convention --
  *
  *     real:  /dev/__properties__/<ctx>
- *     copy:  <SAGE_PROP_VIEW_DIR>/<ctx>        (same basename, same 128 KB length)
+ *     copy:  <PROPVIEW_DIR>/<ctx>        (same basename, same 128 KB length)
  *
  * If the copy does not exist (or is the wrong length) the VMA is left untouched, so a device
  * with no copies staged behaves exactly as before.
@@ -44,20 +44,24 @@
 #include <linux/stat.h>
 #include <linux/limits.h>
 
-#include <linux/sage_prop_view.h>
+#include <linux/propview.h>
 
-#define SAGE_PROP_VIEW_DIR "/data/misc/sage/propview"
-#define SAGE_PROP_VIEW_AREAS_PARENT "__properties__"
-#define SAGE_PROP_VIEW_COPY_PARENT "propview"
-#define SAGE_PROP_VIEW_HITS 128
+/* DEFERRED: the directory is still the historical /data/misc/sage/propview because the userspace
+ * staging path (the Zygisk cloak's PV_DIR) and every already-staged payload use it. Renaming it to
+ * a neutral /data/misc/propview is a coordinated kernel+module change with a payload migration and
+ * was deliberately left for a later pass; keep the two in sync until then. */
+#define PROPVIEW_DIR "/data/misc/sage/propview"
+#define PROPVIEW_AREAS_PARENT "__properties__"
+#define PROPVIEW_COPY_PARENT "propview"
+#define PROPVIEW_HITS 128
 
-struct sage_pv_hit {
+struct pv_hit {
 	unsigned long start;
 	unsigned long len;
 	char name[NAME_MAX + 1];
 };
 
-struct sage_pv_work {
+struct pv_work {
 	struct callback_head cb;
 };
 
@@ -65,16 +69,16 @@ struct sage_pv_work {
  * directory.  Comparing the parent dentry's name avoids building paths on every VMA.  The
  * VMA holds a reference to vm_file, so the dentry cannot go away underneath us; a rename of
  * these directories is not something that happens at runtime. */
-static bool sage_pv_parent_is(const struct dentry *d, const char *name)
+static bool pv_parent_is(const struct dentry *d, const char *name)
 {
 	return d && d->d_parent && strcmp(d->d_parent->d_name.name, name) == 0;
 }
 
-static void sage_pv_task_work(struct callback_head *cb)
+static void pv_task_work(struct callback_head *cb)
 {
-	struct sage_pv_work *w = container_of(cb, struct sage_pv_work, cb);
+	struct pv_work *w = container_of(cb, struct pv_work, cb);
 	struct mm_struct *mm = current->mm;
-	struct sage_pv_hit *hits;
+	struct pv_hit *hits;
 	const struct cred *root;
 	char *path;
 	struct vm_area_struct *vma;
@@ -90,7 +94,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 
 	/* Heap, not stack: 16 hit slots with a NAME_MAX name each plus PATH_MAX would blow
 	 * the 2 KB kernel stack-frame limit under -Wframe-larger-than. */
-	hits = kzalloc(sizeof(*hits) * SAGE_PROP_VIEW_HITS, GFP_KERNEL);
+	hits = kzalloc(sizeof(*hits) * PROPVIEW_HITS, GFP_KERNEL);
 	path = kmalloc(PATH_MAX, GFP_KERNEL);
 	if (!hits || !path) {
 		kfree(hits);
@@ -110,9 +114,9 @@ static void sage_pv_task_work(struct callback_head *cb)
 		if (!d)
 			continue;
 		/* Already ours: do not remap a copy onto itself on a repeated setresuid. */
-		if (sage_pv_parent_is(d, SAGE_PROP_VIEW_COPY_PARENT))
+		if (pv_parent_is(d, PROPVIEW_COPY_PARENT))
 			continue;
-		if (!sage_pv_parent_is(d, SAGE_PROP_VIEW_AREAS_PARENT))
+		if (!pv_parent_is(d, PROPVIEW_AREAS_PARENT))
 			continue;
 		if (strncmp(d->d_name.name, "u:object_r:", 11) != 0)
 			continue;
@@ -120,7 +124,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 		len = strlen(d->d_name.name);
 		if (len == 0 || len > NAME_MAX)
 			continue;
-		if (n >= SAGE_PROP_VIEW_HITS)
+		if (n >= PROPVIEW_HITS)
 			break;
 
 		hits[n].start = vma->vm_start;
@@ -140,19 +144,19 @@ static void sage_pv_task_work(struct callback_head *cb)
 		const struct cred *saved;
 		unsigned long addr;
 
-		snprintf(path, PATH_MAX, SAGE_PROP_VIEW_DIR "/%s", hits[i].name);
+		snprintf(path, PATH_MAX, PROPVIEW_DIR "/%s", hits[i].name);
 
 		saved = override_creds(root);
 		f = filp_open(path, O_RDONLY | O_LARGEFILE, 0);
 		revert_creds(saved);
 
 		if (IS_ERR(f)) {
-			pr_warn_ratelimited("sage_prop_view: open %s failed %ld\n",
+			pr_warn_ratelimited("propview: open %s failed %ld\n",
 					    path, (long)PTR_ERR(f));
 			continue;
 		}
 		if ((unsigned long)i_size_read(file_inode(f)) != hits[i].len) {
-			pr_warn_ratelimited("sage_prop_view: %s is %lld bytes, VMA is %lu\n",
+			pr_warn_ratelimited("propview: %s is %lld bytes, VMA is %lu\n",
 					    path, (long long)i_size_read(file_inode(f)),
 					    hits[i].len);
 			fput(f);
@@ -165,7 +169,7 @@ static void sage_pv_task_work(struct callback_head *cb)
 		revert_creds(saved);
 
 		if (addr != hits[i].start)
-			pr_warn_ratelimited("sage_prop_view: vm_mmap %s at %#lx failed %ld\n",
+			pr_warn_ratelimited("propview: vm_mmap %s at %#lx failed %ld\n",
 					    path, hits[i].start, (long)addr);
 		fput(f);
 	}
@@ -175,9 +179,9 @@ static void sage_pv_task_work(struct callback_head *cb)
 	kfree(hits);
 }
 
-void sage_prop_view_queue(void)
+void propview_queue(void)
 {
-	struct sage_pv_work *w;
+	struct pv_work *w;
 
 	if (!current->mm)
 		return;
@@ -185,7 +189,7 @@ void sage_prop_view_queue(void)
 	w = kzalloc(sizeof(*w), GFP_KERNEL);
 	if (!w)
 		return;
-	init_task_work(&w->cb, sage_pv_task_work);
+	init_task_work(&w->cb, pv_task_work);
 	if (task_work_add(current, &w->cb, TWA_RESUME))
 		kfree(w);
 }
@@ -201,7 +205,7 @@ void sage_prop_view_queue(void)
  * which the app can read the live area. Non-app uids are skipped: the copy is only ever mapped for
  * uid >= 10000 (services must keep the real values -- ro.boot.qemu gates the USB gadget path).
  */
-void sage_prop_view_after_mmap(struct file *file, unsigned long addr, unsigned long len)
+void propview_after_mmap(struct file *file, unsigned long addr, unsigned long len)
 {
 	const struct cred *root, *saved;
 	struct file *copy;
@@ -215,7 +219,7 @@ void sage_prop_view_after_mmap(struct file *file, unsigned long addr, unsigned l
 	if (current_uid().val < 10000)
 		return;
 	d = file->f_path.dentry;
-	if (!sage_pv_parent_is(d, SAGE_PROP_VIEW_AREAS_PARENT))
+	if (!pv_parent_is(d, PROPVIEW_AREAS_PARENT))
 		return;
 	name = d->d_name.name;
 	if (strncmp(name, "u:object_r:", 11) != 0 || strlen(name) > NAME_MAX)
@@ -224,7 +228,7 @@ void sage_prop_view_after_mmap(struct file *file, unsigned long addr, unsigned l
 	path = kmalloc(PATH_MAX, GFP_KERNEL);
 	if (!path)
 		return;
-	snprintf(path, PATH_MAX, SAGE_PROP_VIEW_DIR "/%s", name);
+	snprintf(path, PATH_MAX, PROPVIEW_DIR "/%s", name);
 
 	root = get_task_cred(&init_task);
 	saved = override_creds(root);
@@ -235,7 +239,7 @@ void sage_prop_view_after_mmap(struct file *file, unsigned long addr, unsigned l
 	if (IS_ERR(copy))
 		goto out_cred;
 	if ((unsigned long)i_size_read(file_inode(copy)) != len) {
-		pr_warn_ratelimited("sage_prop_view: %s is %lld bytes, VMA is %lu\n",
+		pr_warn_ratelimited("propview: %s is %lld bytes, VMA is %lu\n",
 				    path, (long long)i_size_read(file_inode(copy)), len);
 		fput(copy);
 		goto out_cred;
@@ -245,7 +249,7 @@ void sage_prop_view_after_mmap(struct file *file, unsigned long addr, unsigned l
 	got = vm_mmap(copy, addr, len, PROT_READ, MAP_SHARED | MAP_FIXED, 0);
 	revert_creds(saved);
 	if (got != addr)
-		pr_warn_ratelimited("sage_prop_view: late vm_mmap %s at %#lx failed %ld\n",
+		pr_warn_ratelimited("propview: late vm_mmap %s at %#lx failed %ld\n",
 				    path, addr, (long)got);
 	fput(copy);
 
